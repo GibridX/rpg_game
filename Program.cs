@@ -4,6 +4,42 @@ using System.Linq;
 
 namespace TextRPG
 {
+
+    public static class GameConfig
+    {
+        public static int BasePlayerHealth = 100;
+        public static int BasePlayerAttack = 10;
+        public static int PlayerDamageVariance = 3;
+        public static int ExpForNextLevelMultiplier = 2;
+        public static int RestRoomCooldown = 5;
+        public static int MaxInventorySize = 20;
+        public static int MaxPlayerLevel = 25;
+
+        public static int MinEnemyHealth = 30;
+        public static int MaxEnemyHealth = 200;
+        public static int EnemyHealthPerLevel = 6;
+        public static int EnemyAttackPerLevel = 2;
+        public static int BaseEnemyAttack = 8;
+        public static int BaseEnemyGold = 10;
+        public static int EnemyGoldPerLevel = 4;
+
+        public static int EscapeChance = 50;
+        public static int DodgePerLevel = 2;
+
+        public static int BaseEmptyRoomChance = 25;
+        public static int BaseEnemyRoomChance = 20;
+        public static int BaseTreasureRoomChance = 10;
+        public static int BaseMerchantRoomChance = 5;
+        public static int BaseRestRoomChance = 5;
+
+        public static int MaxDugeonGenerationAttempts = 10;
+        public static int EnemyChance = 20;
+        public static int TreasureChance = 10;
+
+        public static int BossHealthMuliplier = 10;
+        public static int BossAttackMultiplier = 3;
+    }
+
     public abstract class GameObject : IEquatable<GameObject>
     {
         public string Name { get; protected set; }
@@ -46,7 +82,9 @@ namespace TextRPG
         Treasure,
         Boss,
         Start,
-        Exit
+        Exit,
+        Merchant,
+        Rest
     }
 
     public enum ItemType
@@ -70,6 +108,7 @@ namespace TextRPG
         public int Experience { get; set; }
         public int ExperienceToNextLevel { get; set; }
         public int Gold { get; set; }
+        public int TurnsSinceLastRest { get; set; } = -1;
         public List<Item> Inventory { get; private set; }
         public Item? EquippedWeapon { get; private set; }
         public Item? EquippedArmor { get; private set; }
@@ -88,46 +127,120 @@ namespace TextRPG
             Inventory = new List<Item>();
         }
 
+        public void IncrementTurnCounter()
+        {
+            if (TurnsSinceLastRest >= 0)
+            {
+                TurnsSinceLastRest++;
+            }
+        }
+
+        public void ActivateRestCooldown()
+        {
+            TurnsSinceLastRest = 0;
+        }
+
+        public static class InventoryHelper
+        {
+            public static void DisplayInventory(Player player)
+            {
+                Console.WriteLine("\n=== Инвентарь ===");
+                Console.WriteLine($"Оружие: {(player.EquippedWeapon?.Name ?? "Нет")}");
+                Console.WriteLine($"Броня: {(player.EquippedArmor?.Name ?? "Нет")}");
+                Console.WriteLine();
+
+                if (!player.Inventory.Any())
+                {
+                    Console.WriteLine("Ваш инвентарь пуст.");
+                }
+                else
+                {
+                    for (int i = 0; i < player.Inventory.Count; i++)
+                    {
+                        string equippedMark = player.Inventory[i] == player.EquippedWeapon ||
+                                            player.Inventory[i] == player.EquippedArmor ? " [Экипировано]" : "";
+                        Console.WriteLine($"{i + 1}. {player.Inventory[i]}{equippedMark}");
+                    }
+                }
+            }
+
+            public static bool IsValidInventoryChoice(string input, int inventoryCount)
+            {
+                if (input == "0" || input == "u") return true;
+                return int.TryParse(input, out int choice) && choice > 0 && choice <= inventoryCount;
+            }
+        }
+
         public void EquipItem(Item item)
         {
+
             if (!Inventory.Contains(item))
             {
                 Console.WriteLine("Предмет не найден в инвентаре!");
                 return;
             }
+
+            Item? oldEquipment = null;
+            bool equipSuccess = false;
+
             switch (item.Type)
             {
-                case ItemType.Weapon:
-                    if (EquippedWeapon != null)
-                        UnequipItem(EquippedWeapon);
+                case ItemType.Weapon when item.EquipmentType == EquipmentType.Weapon:
+                    oldEquipment = EquippedWeapon;
                     EquippedWeapon = item;
-                    Attack = BaseAttack + (item.Value / 2);
-                    Console.WriteLine($"Вы экипировали {item.Name} (+{item.Value / 2} к атаке)");
+                    Attack = BaseAttack + item.Value;
+                    Console.WriteLine($"Вы экипировали {item.Name} (+{item.Value} к атаке)");
+                    equipSuccess = true;
                     break;
                 case ItemType.Treasure when item.EquipmentType == EquipmentType.Armor:
-                    if (EquippedArmor != null)
-                        UnequipItem(EquippedArmor);
+                    oldEquipment = EquippedArmor;
                     EquippedArmor = item;
+                    double healthPercent = (double)Health / MaxHealth;
                     MaxHealth = BaseMaxHealth + item.Value;
+                    Health = (int)(MaxHealth * healthPercent);
+                    if (Health <= 0) Health = 1;
                     Console.WriteLine($"Вы экипировали {item.Name} (+{item.Value} к максимальному HP)");
+                    equipSuccess = true;
                     break;
+                default:
+                    Console.WriteLine("Этот предмет нельзя экипировать.");
+                    return;
+            }
+
+            if (equipSuccess)
+            {
+                Inventory.Remove(item);
+
+                if (oldEquipment != null)
+                {
+                    Inventory.Add(oldEquipment);
+                    UnequipItem(oldEquipment, silent: true);
+                }
             }
         }
 
-        public void UnequipItem(Item item)
+        public void UnequipItem(Item item, bool silent = false)
         {
             switch (item.Type)
             {
                 case ItemType.Weapon when item == EquippedWeapon:
                     EquippedWeapon = null;
                     Attack = BaseAttack;
-                    Console.WriteLine($"Вы сняли {item.Name}");
+                    if (!silent)
+                    {
+                        Console.WriteLine($"Вы сняли {item.Name}");
+                    }
                     break;
                 case ItemType.Treasure when item == EquippedArmor:
                     EquippedArmor = null;
+                    double healthPercent = (double)Health / MaxHealth;
                     MaxHealth = BaseMaxHealth;
-                    Health = Math.Min(Health, MaxHealth);
-                    Console.WriteLine($"Вы сняли {item.Name}");
+                    Health = (int)(MaxHealth * healthPercent);
+                    Health = Math.Max(1, Math.Min(Health, MaxHealth));
+                    if (!silent)
+                    {
+                        Console.WriteLine($"Вы сняли {item.Name}");
+                    }
                     break;
             }
         }
@@ -145,14 +258,19 @@ namespace TextRPG
 
         public void LevelUp()
         {
+            if (Level >= GameConfig.MaxPlayerLevel)
+            {
+                ConsoleHelper.WriteColor("Вы достигли максимального уровня!", ConsoleColor.Yellow);
+                return;
+            }
             Level++;
             Experience -= ExperienceToNextLevel;
-            ExperienceToNextLevel = (int)(ExperienceToNextLevel * 1.5);
+            ExperienceToNextLevel = (int)(ExperienceToNextLevel * 2);
             
             BaseAttack += 3;
             BaseMaxHealth += 20;
 
-            Attack = BaseAttack + (EquippedWeapon?.Value / 2 ?? 0);
+            Attack = BaseAttack + (EquippedWeapon?.Value ?? 0);
             int oldMaxHealth = MaxHealth;
             MaxHealth = BaseMaxHealth + (EquippedArmor?.Value ?? 0);
 
@@ -165,19 +283,19 @@ namespace TextRPG
             }
             
             Console.WriteLine($"╔══════════════════════════════════════╗", ConsoleColor.Yellow);
-            WriteColor($"║          УРОВЕНЬ ПОВЫШЕН! {Level}           ║", ConsoleColor.Yellow);
-            WriteColor($"║  HP: +20  АТК: +3  Макс.Опыт: {ExperienceToNextLevel} ║", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColor($"║          УРОВЕНЬ ПОВЫШЕН! {Level}           ║", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColor($"║  HP: +20  АТК: +3  Макс.Опыт: {ExperienceToNextLevel} ║", ConsoleColor.Yellow);
             Console.WriteLine($"╚══════════════════════════════════════╝", ConsoleColor.Yellow);
         }
 
         public void TakeDamage(int damage)
         {
             int actualDamage = damage;
-            // Шанс уклонения/блока
-            if (random.Next(100) < (Level * 2))
+
+            if (random.Next(100) < (Level * GameConfig.DodgePerLevel))
             {
                 actualDamage = damage / 2;
-                WriteColor(" Уклонение! Урон уменьшен вдвое.", ConsoleColor.Cyan);
+                ConsoleHelper.WriteColor(" Уклонение! Урон уменьшен вдвое.", ConsoleColor.Cyan);
             }
             
             Health = Math.Max(0, Health - actualDamage);
@@ -197,29 +315,26 @@ namespace TextRPG
             {
                 Health = newHealth;
             }
-            WriteColor($" Восстановлено {actualHeal} HP. Теперь HP: {Health}/{MaxHealth}", ConsoleColor.Green);
+            ConsoleHelper.WriteColor($" Восстановлено {actualHeal} HP. Теперь HP: {Health}/{MaxHealth}", ConsoleColor.Green);
         }
 
         public void AddGold(int amount)
         {
             Gold += amount;
-            WriteColor($" Найдено {amount} золота! Всего: {Gold}", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColor($" Найдено {amount} золота! Всего: {Gold}", ConsoleColor.Yellow);
         }
 
         public void AddItem(Item item)
         {
+            if (Inventory.Count >= GameConfig.MaxInventorySize)
+            {
+                ConsoleHelper.WriteColor("Инвентарь полон! Вы не можете поднять этот предмет.", ConsoleColor.Red);
+                return;
+            }
             Inventory.Add(item);
         }
 
         private Random random = new Random();
-
-        private void WriteColor(string text, ConsoleColor color)
-        {
-            var originalColor = Console.ForegroundColor;
-            Console.ForegroundColor = color;
-            Console.Write(text);
-            Console.ForegroundColor = originalColor;
-        }
 
         public override bool Equals(object? obj)
         {
@@ -271,6 +386,8 @@ namespace TextRPG
                 RoomType.Treasure => "Блеск золота и драгоценностей слепит глаза. Сокровищница полна богатств!",
                 RoomType.Boss => "Огромное логово с костями гигантских существ. Здесь обитает нечто ужасное...",
                 RoomType.Empty => "Пустая каменная комната. Тишина нарушается лишь эхом ваших шагов.",
+                RoomType.Merchant => "В центре комнаты стоит сидит загадочный торговец, разложивший свои товары на разодранном покрывале.",
+                RoomType.Rest => "Тихая и освещённая комната. Мягкий свет факелов и спокойная атмосфера навевают чувство безопасности.",
                 _ => "Неизвестное место."
             };
         }
@@ -314,10 +431,15 @@ namespace TextRPG
                    EquipmentType equipType = EquipmentType.Other, 
                    ConsoleColor color = ConsoleColor.White) : base(name, x, y)
         {
-            Value = value;
+            Value = Math.Max(0, value);
             Type = type;
             EquipmentType = equipType;
             Color = color;
+        }
+
+        public Item CreateCopy(int x, int y)
+        {
+            return new Item(this.Name, x, y, this.Value, this.Type, this.EquipmentType, this.Color);
         }
 
         public override bool Equals(object? obj)
@@ -406,7 +528,7 @@ namespace TextRPG
             return $"{Name} - Размер: {Width}x{Height}, Комнат: {Rooms.Count}, Глубина: {Depth}";
         }
 
-        public void DisplayMiniMap(Player player)
+        public void DisplayMiniMap(Player player, bool isExitActive = false)
         {
             Console.WriteLine($"\n=== Миникарта {Name} (Глубина: {Depth}) ===");
 
@@ -424,36 +546,43 @@ namespace TextRPG
                     {
                         if (player.X == x && player.Y == y)
                         {
-                            WriteColorInline("P ", ConsoleColor.Green); // Игрок
-                        }
-                        else if (room.IsExplored)
-                        {
-                            char symbol = GetRoomSymbol(room);
-                            ConsoleColor color = GetRoomColor(room);
-                            WriteColorInline(symbol + " ", color);
+                            ConsoleHelper.WriteColorInline("P ", ConsoleColor.Green); // Игрок
                         }
                         else
                         {
-                            WriteColorInline("? ", ConsoleColor.DarkGray);
+                            char symbol = GetRoomSymbol(room);
+                            ConsoleColor color = GetRoomColor(room, isExitActive);
+                            ConsoleHelper.WriteColorInline(symbol + " ", color);
                         }
                     }
                     else
                     {
-                        WriteColorInline("# ", ConsoleColor.DarkRed); // Стена
+                        ConsoleHelper.WriteColorInline("# ", ConsoleColor.DarkGray); // Стена/неизвестная область
                     }
                 }
                 Console.WriteLine();
             }
 
-           Console.WriteLine("\nЛегенда:");
-            WriteColorInline("P - Вы ", ConsoleColor.Green);
-            WriteColorInline("S - Старт ", ConsoleColor.Blue);
-            WriteColorInline("E - Выход ", ConsoleColor.Yellow);
-            WriteColorInline("M - Враг ", ConsoleColor.Red);
-            WriteColorInline("T - Сокровище ", ConsoleColor.Magenta);
-            WriteColorInline("B - Босс ", ConsoleColor.DarkRed);
-            WriteColorInline("? - Неизвестно", ConsoleColor.DarkGray);
-            WriteColorInline("# - Стена", ConsoleColor.DarkRed);
+            Console.WriteLine("\nЛегенда:");
+            ConsoleHelper.WriteColorInline("P - Вы ", ConsoleColor.Green);
+            ConsoleHelper.WriteColorInline("S - Старт ", ConsoleColor.Blue);
+
+            if (isExitActive)
+            {
+                ConsoleHelper.WriteColorInline("E - Выход (активен) ", ConsoleColor.Yellow);
+            }
+            else
+            {
+                ConsoleHelper.WriteColorInline("E - Выход (заблокирован) ", ConsoleColor.DarkYellow);
+            }
+
+            ConsoleHelper.WriteColorInline("M - Враг ", ConsoleColor.Red);
+            ConsoleHelper.WriteColorInline("T - Сокровище ", ConsoleColor.Magenta);
+            ConsoleHelper.WriteColorInline("B - Босс ", ConsoleColor.DarkRed);
+            ConsoleHelper.WriteColorInline("$ - Торговец ", ConsoleColor.DarkYellow);
+            ConsoleHelper.WriteColorInline($"R - Отдых \n", ConsoleColor.DarkGreen);
+            ConsoleHelper.WriteColorInline("+ - Пустая ", ConsoleColor.Gray);
+            ConsoleHelper.WriteColorInline("# - Стена", ConsoleColor.DarkRed);
             Console.WriteLine();
         }
 
@@ -462,35 +591,78 @@ namespace TextRPG
             return room.Type switch
             {
                 RoomType.Start => 'S',
-                RoomType.Exit => 'E',
                 RoomType.Enemy => 'M',
                 RoomType.Treasure => 'T',
                 RoomType.Boss => 'B',
-                RoomType.Empty => ' ',
+                RoomType.Merchant => '$',
+                RoomType.Rest => 'R',
+                RoomType.Empty => '+',
                 _ => '?'
             };
         }
 
-        public ConsoleColor GetRoomColor(Room room)
+        public ConsoleColor GetRoomColor(Room room, bool isExitActive = false)
         {
             return room.Type switch
             {
                 RoomType.Start => ConsoleColor.Blue,
-                RoomType.Exit => ConsoleColor.Yellow,
                 RoomType.Enemy => ConsoleColor.Red,
                 RoomType.Treasure => ConsoleColor.Magenta,
                 RoomType.Boss => ConsoleColor.DarkRed,
+                RoomType.Merchant => ConsoleColor.DarkYellow,
+                RoomType.Rest => ConsoleColor.DarkGreen,
                 RoomType.Empty => ConsoleColor.Gray,
                 _ => ConsoleColor.White
             };
         }
+    }
+    
+    public static class ConsoleHelper
+    {
+        public static void WriteColor(string text, ConsoleColor color)
+        {
+            var originalColor = Console.ForegroundColor;
+            Console.ForegroundColor = color;
+            Console.WriteLine(text);
+            Console.ForegroundColor = originalColor;
+        }
 
-        private void WriteColorInline(string text, ConsoleColor color)
+        public static void WriteColorInline(string text, ConsoleColor color)
         {
             var originalColor = Console.ForegroundColor;
             Console.ForegroundColor = color;
             Console.Write(text);
             Console.ForegroundColor = originalColor;
+        }
+    }
+    
+    public static class SimpleHotkeyHandler
+    {
+        public static bool CheckForHotkeys()
+        {
+            if (Console.KeyAvailable)
+            {
+                var key = Console.ReadKey(true);
+                
+                if ((key.Modifiers & ConsoleModifiers.Control) != 0)
+                {
+                    switch (key.Key)
+                    {
+                        case ConsoleKey.D:
+                            HandleCtrlD();
+                            return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static void HandleCtrlD()
+        {
+            Console.WriteLine();
+            ConsoleHelper.WriteColor("[Ctrl+D] Отладочная информация - функция в разработке", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColor("Нажмите любую клавишу чтобы продолжить...", ConsoleColor.Gray);
+            Console.ReadKey(true);
         }
     }
 
@@ -502,6 +674,7 @@ namespace TextRPG
         private Random random;
         private bool needsClear = true;
         private int currentDepth = 1;
+        private bool bossDefeated = false;
 
         public Game()
         {
@@ -510,15 +683,49 @@ namespace TextRPG
             InitializeGame();
         }
 
-        private void InitializeGame()
+        public bool IsExitActive()
         {
-            player = new Player("Герой", 0, 0);
-            currentDungeon = generator.GenerateDungeon("Древний склеп", 20, currentDepth);
+            return bossDefeated;
+        }
 
-            var startRoom = currentDungeon.Rooms.First(r => r.Type == RoomType.Start);
+        private void InitializeGame(bool isNewGame = true)
+        {
+            if (isNewGame)
+            {
+                player = new Player("Герой", 0, 0);
+                currentDepth = 1;
+                bossDefeated = false;
+            }
+            else
+            {
+                ConsoleHelper.WriteColor($"\nВы спускаетесь на новые грубины подземелья {currentDepth}...", ConsoleColor.Cyan);
+                bossDefeated = false;
+            }
+
+            currentDungeon = generator.GenerateDungeon($"Древний склеп - Уровень {currentDepth}", 20, currentDepth);
+
+            var startRoom = currentDungeon.Rooms.FirstOrDefault(r => r.Type == RoomType.Start);
+            if (startRoom == null)
+            {
+                startRoom = currentDungeon.Rooms.FirstOrDefault();
+                if (startRoom == null)
+                {
+                    startRoom = new Room(0, 0, RoomType.Start);
+                    currentDungeon.AddRoom(startRoom);
+                }
+                else
+                {
+                    startRoom.Type = RoomType.Start;
+                }
+            }
             player.X = startRoom.X;
             player.Y = startRoom.Y;
             startRoom.IsExplored = true;
+
+            if (!isNewGame)
+            {
+                ConsoleHelper.WriteColor($"Вы вошли в подземелье уровня {currentDepth}. Будьте осторожны!", ConsoleColor.Yellow);
+            }
         }
 
         private void ClearIfNeeded()
@@ -533,10 +740,10 @@ namespace TextRPG
 
         private void DisplayGameHeader()
         {
-            WriteColor(@"
+            ConsoleHelper.WriteColor(@"
 ╔══════════════════════════════════════════════════════════════╗
-║                   ТЕКСТОВАЯ RPG - ПОДЗЕМЕЛЬЕ                ║
-║                 Древний Склеп - Глубина: " + $"{currentDepth,2}" + @"                 ║
+║                   ТЕКСТОВАЯ RPG - ПОДЗЕМЕЛЬЕ                 ║
+║                 Древний Склеп - Глубина: " + $"{currentDepth,2}" + @"                  ║
 ╚══════════════════════════════════════════════════════════════╝", ConsoleColor.Cyan);
         }
 
@@ -545,60 +752,53 @@ namespace TextRPG
             needsClear = true;
         }
 
-        private void WriteColor(string text, ConsoleColor color)
-        {
-            var originalColor = Console.ForegroundColor;
-            Console.ForegroundColor = color;
-            Console.WriteLine(text);
-            Console.ForegroundColor = originalColor;
-        }
-
-        private void WriteColorInline(string text, ConsoleColor color)
-        {
-            var originalColor = Console.ForegroundColor;
-            Console.ForegroundColor = color;
-            Console.Write(text);
-            Console.ForegroundColor = originalColor;
-        }
-
         private void DisplayCompactStatusBar()
         {
             Console.WriteLine("╔══════════════════════════════════════════════════╗");
-            
-            // HP бар
+
             double healthPercent = (double)player.Health / player.MaxHealth;
             int barWidth = 20;
             int filledWidth = (int)(barWidth * healthPercent);
             string healthBar = new string('█', filledWidth) + new string('░', barWidth - filledWidth);
-            
-            WriteColorInline($"║ HP: ", ConsoleColor.Red);
-            WriteColorInline($"{player.Health,3}/{player.MaxHealth,3} ", ConsoleColor.White);
-            WriteColorInline($"[{healthBar}] ", ConsoleColor.Red);
-            
-            WriteColorInline($"АТК: {player.Attack,2} ", ConsoleColor.Yellow);
-            WriteColorInline($"УР: {player.Level,2} ", ConsoleColor.Cyan);
-            WriteColorInline($"💰: {player.Gold,3} ", ConsoleColor.Yellow);
+
+            ConsoleHelper.WriteColorInline($"║ HP: ", ConsoleColor.Red);
+            ConsoleHelper.WriteColorInline($"{player.Health,3}/{player.MaxHealth,3} ", ConsoleColor.White);
+            ConsoleHelper.WriteColorInline($"[{healthBar}] ", ConsoleColor.Red);
+
+            ConsoleHelper.WriteColorInline($"АТК: {player.Attack,2} ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"УР: {player.Level,2} ", ConsoleColor.Cyan);
+            ConsoleHelper.WriteColorInline($"Золото: {player.Gold,3} ", ConsoleColor.Yellow);
             Console.WriteLine("║");
-            
-            // Опыт бар
+
             double expPercent = (double)player.Experience / player.ExperienceToNextLevel;
             filledWidth = (int)(barWidth * expPercent);
             string expBar = new string('█', filledWidth) + new string('░', barWidth - filledWidth);
-            
-            WriteColorInline($"║ Опыт: {player.Experience,3}/{player.ExperienceToNextLevel,3} ", ConsoleColor.Blue);
-            WriteColorInline($"[{expBar}]", ConsoleColor.Blue);
+
+            ConsoleHelper.WriteColorInline($"║ Опыт: {player.Experience,3}/{player.ExperienceToNextLevel,3} ", ConsoleColor.Blue);
+            ConsoleHelper.WriteColorInline($"[{expBar}]", ConsoleColor.Blue);
+            if (player.TurnsSinceLastRest == -1)
+            {
+                ConsoleHelper.WriteColorInline($" Отдых: готов", ConsoleColor.DarkGreen);
+            }
+            else if (player.TurnsSinceLastRest < GameConfig.RestRoomCooldown)
+            {
+                int turnsRemaining = GameConfig.RestRoomCooldown - player.TurnsSinceLastRest;
+                ConsoleHelper.WriteColorInline($" Отдых: {turnsRemaining}", ConsoleColor.DarkGreen);
+            }
+            else
+            {
+                ConsoleHelper.WriteColorInline($" Отдых: готов", ConsoleColor.DarkGreen);
+            }
             Console.WriteLine("                      ║");
-            
+
             Console.WriteLine("╚══════════════════════════════════════════════════╝");
 
-            // Текущее местоположение
             var currentRoom = currentDungeon.GetRoom(player.X, player.Y);
             if (currentRoom != null)
             {
                 Console.WriteLine();
-                WriteColorInline(" 📍 ", ConsoleColor.Green);
-                WriteColorInline($"{GetRoomDescription(currentRoom)} ", GetRoomTitleColor(currentRoom.Type));
-                WriteColorInline($"({player.X}, {player.Y})", ConsoleColor.Gray);
+                ConsoleHelper.WriteColorInline($"{GetRoomDescription(currentRoom)} ", GetRoomTitleColor(currentRoom.Type));
+                ConsoleHelper.WriteColorInline($"({player.X}, {player.Y})", ConsoleColor.Gray);
                 Console.WriteLine();
             }
             Console.WriteLine();
@@ -614,7 +814,6 @@ namespace TextRPG
             return type switch
             {
                 RoomType.Start => ConsoleColor.Blue,
-                RoomType.Exit => ConsoleColor.Yellow,
                 RoomType.Enemy => ConsoleColor.Red,
                 RoomType.Treasure => ConsoleColor.Magenta,
                 RoomType.Boss => ConsoleColor.DarkRed,
@@ -625,105 +824,304 @@ namespace TextRPG
 
         public void Start()
         {
-            DisplayGameHeader();
-            WriteColor("Нажмите любую клавишу чтобы начать...", ConsoleColor.Green);
-            Console.ReadKey(true);
-
-            while (player.Health > 0)
+            try
             {
-                ClearIfNeeded();
-                DisplayCompactStatusBar();
-                currentDungeon.DisplayMiniMap(player);
-                ShowMainMenu();
+                DisplayGameHeader();
+                ConsoleHelper.WriteColor("Нажмите любую клавишу чтобы начать...", ConsoleColor.Green);
+                Console.ReadKey(true);
 
-                var input = Console.ReadLine();
+                InitializeGame(isNewGame: true);
 
-                switch (input)
+                while (player.Health > 0)
                 {
-                    case "1":
-                        MovePlayer();
-                        CheckRoomEvents(afterMove: true);
-                        break;
-                    case "2":
-                        ShowInventory();
-                        CheckRoomEvents(afterMove: false);
-                        break;
-                    case "3":
-                        ShowCharacterInfo();
-                        break;
-                    case "4":
-                        return;
-                    default:
-                        WriteColor("Неверный выбор! Нажмите любую клавишу...", ConsoleColor.Red);
-                        Console.ReadKey(true);
-                        MarkForClear();
-                        continue;
-                }
+                    ClearIfNeeded();
+                    DisplayCompactStatusBar();
+                    currentDungeon.DisplayMiniMap(player, bossDefeated);
 
-                if (currentDungeon.GetRoom(player.X, player.Y)?.Type == RoomType.Exit)
-                {
-                    if (ShowVictoryScreen())
+                    if (!ProcessPlayerInput())
+                        break;
+
+                    if (player.Health <= 0)
                     {
-                        // Переход на следующий уровень
-                        currentDepth++;
-                        InitializeGame();
-                        MarkForClear();
-                        continue;
-                    }
-                    else
-                    {
+                        ShowGameOverScreen();
                         return;
                     }
+
+                    MarkForClear();
                 }
+
+                if (player.Health <= 0)
+                {
+                    ShowGameOverScreen();
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleHelper.WriteColor($"Критическая ошибка: {ex.Message}", ConsoleColor.Red);
+                Console.ReadKey();
+            }
+        }
+
+        private bool ProcessPlayerInput()
+        {
+            if (SimpleHotkeyHandler.CheckForHotkeys())
+            {
                 MarkForClear();
+                return true;
             }
 
-            ShowGameOverScreen();
+            ShowMainMenu();
+            var input = Console.ReadLine();
+
+            switch (input)
+            {
+                case "1":
+                    MovePlayer();
+                    break;
+                case "2":
+                    ShowInventory();
+                    break;
+                case "3":
+                    ShowCharacterInfo();
+                    break;
+                case "4":
+                    return false;
+                default:
+                    ConsoleHelper.WriteColor("Неверный выбор! Нажмите любую клавишу...", ConsoleColor.Red);
+                    Console.ReadKey(true);
+                    MarkForClear();
+                    break;
+            }
+
+            return true;
         }
 
         private void ShowMainMenu()
         {
-            WriteColor("\n🎮 Доступные действия:", ConsoleColor.Cyan);
-            WriteColorInline("1. ", ConsoleColor.Yellow);
-            WriteColorInline("👣 Перемещение", ConsoleColor.White);
-            WriteColorInline("   2. ", ConsoleColor.Yellow);
-            WriteColorInline("🎒 Инвентарь", ConsoleColor.White);
+            ConsoleHelper.WriteColor("\nДоступные действия:", ConsoleColor.Cyan);
+            ConsoleHelper.WriteColorInline("1. ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline("Перемещение", ConsoleColor.White);
+            ConsoleHelper.WriteColorInline("   2. ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline("Инвентарь", ConsoleColor.White);
             Console.WriteLine();
-            WriteColorInline("3. ", ConsoleColor.Yellow);
-            WriteColorInline("📊 Информация о персонаже", ConsoleColor.White);
-            WriteColorInline("   4. ", ConsoleColor.Yellow);
-            WriteColorInline("🚪 Выйти из игры", ConsoleColor.White);
+            ConsoleHelper.WriteColorInline("3. ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline("Информация о персонаже", ConsoleColor.White);
+            ConsoleHelper.WriteColorInline("   4. ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline("Выйти из игры", ConsoleColor.White);
             Console.WriteLine();
-            WriteColorInline("\nВыберите действие: ", ConsoleColor.Green);
+            ConsoleHelper.WriteColorInline("\nВыберите действие: ", ConsoleColor.Green);
         }
 
-        private void CheckRoomEvents(bool afterMove = true)
+        private void Rest()
         {
-            var currentRoom = currentDungeon.GetRoom(player.X, player.Y);
-            if (currentRoom == null) return;
+            ConsoleHelper.WriteColor("\n Комната отдыха", ConsoleColor.DarkGreen);
 
-            if (currentRoom.Type == RoomType.Empty && afterMove && random.Next(100) < 20)
+            if (player.TurnsSinceLastRest >= 0 && player.TurnsSinceLastRest < GameConfig.RestRoomCooldown)
             {
-                RandomEvent();
+                int turnsRemaining = GameConfig.RestRoomCooldown - player.TurnsSinceLastRest;
+                ConsoleHelper.WriteColor($"Комната наполняется исцеляющей магией... Вернитесь через {turnsRemaining} ходов.", ConsoleColor.Yellow);
                 Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
                 Console.ReadKey(true);
                 return;
             }
 
-            if (!afterMove) return;
-            
-            switch (currentRoom.Type)
+            ConsoleHelper.WriteColor("Здесь царит спокойная атмосфера. Вы чувствуете, как силы возвращаются к вам.", ConsoleColor.Green);
+
+            int healAmount = player.MaxHealth - player.Health;
+            if (healAmount > 0)
             {
-                case RoomType.Enemy:
-                    Combat();
-                    break;
-                case RoomType.Treasure:
-                    LootRoom(currentRoom);
-                    break;
-                case RoomType.Boss:
-                    BossFight();
-                    break;
+                player.Heal(healAmount);
+                ConsoleHelper.WriteColor($"Вы полностью восстановили здоровье! +{healAmount} HP", ConsoleColor.Green);
             }
+            else
+            {
+                ConsoleHelper.WriteColor("Ваше здоровье уже на максимуме.", ConsoleColor.Gray);
+            }
+
+            player.ActivateRestCooldown();
+
+            var currentRoom = currentDungeon.GetRoom(player.X, player.Y);
+            if (currentRoom != null)
+            {
+                currentRoom.Type = RoomType.Empty;
+                currentRoom.Description = "Пустая комната отдыха. Исцеляющая магия иссякла.";
+            }
+
+            Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+            Console.ReadKey(true);
+        }
+
+        private void VisitMerchant()
+        {
+            ConsoleHelper.WriteColor("\nВстреча с торговцем", ConsoleColor.DarkYellow);
+            ConsoleHelper.WriteColor("'Приветствую, путник! Хочешь взглянуть на мой товар?'", ConsoleColor.Yellow);
+
+            var merchantItems = CreateMerchantItems();
+
+            bool trading = true;
+            while (trading && player.Health > 0)
+            {
+                DisplayMerchantUI(merchantItems);
+                var input = Console.ReadLine();
+
+                if (string.IsNullOrEmpty(input))
+                {
+                    ConsoleHelper.WriteColor("Неверный ввод!", ConsoleColor.Red);
+                    continue;
+                }
+
+                trading = ProcessMerchantInput(input, merchantItems);
+
+                if (trading)
+                {
+                    Console.WriteLine("\nНажмите любую клавишу чтобы продолжить...");
+                    Console.ReadKey(true);
+                }
+            }
+
+            if (player.Health > 0)
+            {
+                ConsoleHelper.WriteColor("'Возвращайся, если понадобятся припасы!'", ConsoleColor.Yellow);
+            }
+        }
+
+        private List<Item> CreateMerchantItems()
+        {
+            return new List<Item>
+            {
+                new Item("Большое зелье здоровья", 0, 0, 50, ItemType.Potion, EquipmentType.Other, ConsoleColor.Green),
+                new Item("Стальной меч", 0, 0, 100, ItemType.Weapon, EquipmentType.Weapon, ConsoleColor.Yellow),
+                new Item("Кожаный доспех", 0, 0, 120, ItemType.Treasure, EquipmentType.Armor, ConsoleColor.Magenta)
+            };
+        }
+
+        private void DisplayPlayerSellableItems()
+        {
+            ConsoleHelper.WriteColor("\nВаш инвентарь для продажи:", ConsoleColor.Cyan);
+
+            var itemsForSale = player.Inventory
+                .Where(item => item != player.EquippedWeapon && item != player.EquippedArmor)
+                .ToList();
+
+            if (itemsForSale.Any())
+            {
+                for (int i = 0; i < itemsForSale.Count; i++)
+                {
+                    var item = itemsForSale[i];
+                    int sellPrice = item.Value / 2;
+                    Console.WriteLine($"{i + 5}. {item.Name} - {sellPrice} золота (продажа)");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Пусто");
+            }
+        }
+
+        private void BuyItem(Item itemToBuy)
+        {
+            if (player.Gold >= itemToBuy.Value)
+            {
+                player.Gold -= itemToBuy.Value;
+
+                var boughtItem = new Item(
+                    itemToBuy.Name,
+                    -1, -1,
+                    itemToBuy.Value,
+                    itemToBuy.Type,
+                    itemToBuy.EquipmentType,
+                    itemToBuy.Color
+                );
+
+                player.AddItem(boughtItem);
+                ConsoleHelper.WriteColor($"Вы купили {itemToBuy.Name}!", ConsoleColor.Green);
+            }
+            else
+            {
+                ConsoleHelper.WriteColor("Недостаточно золота!", ConsoleColor.Red);
+            }
+        }
+
+        private void SellItem(int itemIndex)
+        {
+            var itemsForSale = player.Inventory
+                .Where(item => item != player.EquippedWeapon && item != player.EquippedArmor)
+                .ToList();
+
+            if (itemIndex < itemsForSale.Count && itemIndex >= 0)
+            {
+                var itemToSell = itemsForSale[itemIndex];
+
+                if (itemToSell == player.EquippedWeapon || itemToSell == player.EquippedArmor)
+                {
+                    ConsoleHelper.WriteColor("Нельзя продать экипированный предмет! Сначала снимите его.", ConsoleColor.Red);
+                    return;
+                }
+
+                int sellPrice = itemToSell.Value / 2;
+
+                player.Inventory.Remove(itemToSell);
+                player.Gold += sellPrice;
+                ConsoleHelper.WriteColor($"Вы продали {itemToSell.Name} за {sellPrice} золота!", ConsoleColor.Yellow);
+            }
+            else
+            {
+                ConsoleHelper.WriteColor("Неверный выбор предмета!", ConsoleColor.Red);
+            }
+        }
+
+        private void DisplayMerchantUI(List<Item> merchantItems)
+        {
+            Console.WriteLine($"\nВаше золото: {player.Gold}");
+            ConsoleHelper.WriteColor("\nТовары торговца:", ConsoleColor.Yellow);
+
+            for (int i = 0; i < merchantItems.Count; i++)
+            {
+                Console.WriteLine($"{i + 1}. {merchantItems[i].Name} - {merchantItems[i].Value} золота");
+            }
+
+            DisplayPlayerSellableItems();
+        }
+
+        private bool ProcessMerchantInput(string? input, List<Item> merchantItems)
+        {
+            if (input == "0")
+            {
+                return false;
+            }
+
+            if (int.TryParse(input, out int choice))
+            {
+                if (choice >= 1 && choice <= merchantItems.Count)
+                {
+                    BuyItem(merchantItems[choice - 1]);
+                }
+                else if (choice >= 5 && choice <= 9)
+                {
+                    var itemsForSale = player.Inventory
+                    .Where(item => item != player.EquippedWeapon && item != player.EquippedArmor)
+                    .ToList();
+                    int itemIndex = choice - 5;
+                    if (itemIndex >= 0 && itemIndex < itemsForSale.Count)
+                    {
+                        SellItem(itemIndex);
+                    }
+                    else
+                    {
+                        ConsoleHelper.WriteColor("Неверный выбор предмета!", ConsoleColor.Red);
+                    }
+                }
+                else
+                {
+                    ConsoleHelper.WriteColor("Неверный выбор!", ConsoleColor.Red);
+                }
+            }
+            else
+            {
+                ConsoleHelper.WriteColor("Неверный ввод!", ConsoleColor.Red);
+            }
+
+            return true;
         }
 
         private void ShowInventory()
@@ -753,7 +1151,15 @@ namespace TextRPG
                 }
 
                 Console.WriteLine("\nВыберите действие:");
-                Console.WriteLine("1-9 - Использовать/Экипировать предмет");
+                if (player.Inventory.Count <= 9)
+                {
+                    Console.WriteLine($"1-{player.Inventory.Count} - Использовать/Экипировать предмет");
+                }
+                else
+                {
+                    Console.WriteLine($"1-9 - Использовать/Экипировать предмет");
+                    Console.WriteLine($"Или введите номер предмета (1-{player.Inventory.Count})");
+                }
                 Console.WriteLine("U - Снять экипировку");
                 Console.WriteLine("0 - Отмена");
                 var input = Console.ReadLine()?.ToLower();
@@ -796,52 +1202,38 @@ namespace TextRPG
                         {
                             case ItemType.Potion:
                                 int healValue = selectedItem.Value;
-                                player.Inventory.Remove(selectedItem);
                                 player.Heal(healValue);
+                                player.Inventory.Remove(selectedItem);
                                 Console.WriteLine($"Вы использовали {selectedItem.Name}!");
                                 break;
-                                
+
                             case ItemType.Weapon:
                             case ItemType.Treasure:
-                                if (selectedItem.EquipmentType == EquipmentType.Armor)
+                                if (selectedItem.EquipmentType == EquipmentType.Weapon ||
+                                    selectedItem.EquipmentType == EquipmentType.Armor)
                                     player.EquipItem(selectedItem);
                                 else
                                     Console.WriteLine("Этот предмет нельзя экипировать.");
                                 break;
-                                
+
                             default:
                                 Console.WriteLine("Этот предмет нельзя использовать.");
                                 break;
                         }
                     }
+                    else
+                    {
+                        Console.WriteLine("Неверный номер предмета!");
+                    }
+                }
+                else if (input != "u" && input != "0")
+                {
+                    Console.WriteLine("Неверный ввод!");
                 }
             }
             Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
             Console.ReadKey(true);
             MarkForClear();
-        }
-
-        private void RandomEvent()
-        {
-            int eventType = random.Next(3);
-            switch (eventType)
-            {
-                case 0:
-                    int healAmount = random.Next(10, 25);
-                    player.Heal(healAmount);
-                    Console.WriteLine($"Вы нашли источник здоровья! +{healAmount} HP");
-                    break;
-                case 1:
-                    int damage = random.Next(5, 15);
-                    player.TakeDamage(damage);
-                    Console.WriteLine($"Вы попали на ловушку! -{damage} HP");
-                    break;
-                case 2:
-                    var item = new Item("Случайный артефакт", player.X, player.Y, random.Next(20, 50), ItemType.Treasure);
-                    player.AddItem(item);
-                    Console.WriteLine($"Вы нашли {item.Name}!");
-                    break;
-            }
         }
 
         private void LootRoom(Room room)
@@ -850,7 +1242,8 @@ namespace TextRPG
             {
                 foreach (var item in room.Items.ToList())
                 {
-                    player.AddItem(item);
+                    var inventoryItem = item.CreateCopy(-1, -1);
+                    player.AddItem(inventoryItem);
                     room.Items.Remove(item);
                     Console.WriteLine($"Вы нашли {item.Name}!");
 
@@ -866,14 +1259,18 @@ namespace TextRPG
                     }
                 }
                 room.Type = RoomType.Empty;
+
+                Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                Console.ReadKey(true);
             }
             else
             {
                 Console.WriteLine("Сокровищница пуста.");
                 room.Type = RoomType.Empty;
+
+                Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                Console.ReadKey(true);
             }
-            Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
-            Console.ReadKey(true);
         }
 
         private void BossFight()
@@ -881,8 +1278,8 @@ namespace TextRPG
             var currentRoom = currentDungeon.GetRoom(player.X, player.Y);
             if (currentRoom == null) return;
 
-            int bossHealth = 80 + (player.Level * 10);
-            int bossAttack = 10 + (player.Level * 3);
+            int bossHealth = 80 + (player.Level * GameConfig.BossHealthMuliplier);
+            int bossAttack = 10 + (player.Level * GameConfig.BossAttackMultiplier);
 
             Console.WriteLine($"\nБитва с Боссом! Здоровье: {bossHealth}, Атака: {bossAttack}");
 
@@ -935,7 +1332,7 @@ namespace TextRPG
             {
                 Console.WriteLine("Вы победили дракона! Вы настоящий герой!");
 
-                currentRoom.Type = RoomType.Empty;
+                bossDefeated = true;
 
                 if (currentRoom.Items.Any())
                 {
@@ -946,17 +1343,45 @@ namespace TextRPG
                         Console.WriteLine($"Вы нашли {item.Name}!");
                     }
                 }
+
+                currentRoom.Type = RoomType.Exit;
+
+                ConsoleHelper.WriteColor("Портал выхода активирован! Теперь вы можете покинуть подземелье.", ConsoleColor.Yellow);
+
+                Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                Console.ReadKey(true);
+
+                if (ShowVictoryScreen())
+                {
+                    currentDepth++;
+                    InitializeGame(isNewGame: false);
+                    MarkForClear();
+                }
+                else
+                {
+                    ConsoleHelper.WriteColor("Спасибо за игру! До новых встреч!", ConsoleColor.Green);
+                    return;
+                }
             }
-            Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
-            Console.ReadKey(true);
+            else
+            {
+                Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                Console.ReadKey(true);
+            }
         }
 
         private void MovePlayer()
         {
-            WriteColor("\n🗺️ Куда двигаемся?", ConsoleColor.Cyan);
-            WriteColor("W - вверх, S - вниз, A - влево, D - вправо, 0 - отмена", ConsoleColor.White);
+            ConsoleHelper.WriteColor("\n Куда двигаемся?", ConsoleColor.Cyan);
+            ConsoleHelper.WriteColor("W - вверх, S - вниз, A - влево, D - вправо, 0 - отмена", ConsoleColor.White);
 
             var direction = Console.ReadLine()?.ToLower();
+
+            if (string.IsNullOrEmpty(direction))
+            {
+                ConsoleHelper.WriteColor("Неверное направление!", ConsoleColor.Red);
+                return;
+            }
 
             int newX = player.X, newY = player.Y;
 
@@ -967,15 +1392,23 @@ namespace TextRPG
                 case "a": newX--; break;
                 case "d": newX++; break;
                 case "0":
-                    WriteColor("Перемещение отменено.", ConsoleColor.Yellow);
+                    ConsoleHelper.WriteColor("Перемещение отменено.", ConsoleColor.Yellow);
                     Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
                     Console.ReadKey(true);
                     return;
                 default:
-                    WriteColor("Неверное направление!", ConsoleColor.Red);
+                    ConsoleHelper.WriteColor("Неверное направление!", ConsoleColor.Red);
                     Console.WriteLine("Нажмите любую клавишу...");
                     Console.ReadKey(true);
                     return;
+            }
+
+            if (newX < 0 || newX >= currentDungeon.Width || newY < 0 || newY >= currentDungeon.Height)
+            {
+                ConsoleHelper.WriteColor(" Вы достигли границы подземелья! Дальше бога нет.", ConsoleColor.Red);
+                Console.WriteLine("Нажмите любую клавишу...");
+                Console.ReadKey(true);
+                return;
             }
 
             var newRoom = currentDungeon.GetRoom(newX, newY);
@@ -984,67 +1417,143 @@ namespace TextRPG
                 player.X = newX;
                 player.Y = newY;
 
+                player.IncrementTurnCounter();
+
                 if (!newRoom.IsExplored)
                 {
                     newRoom.IsExplored = true;
-                    WriteColor("🔍 Вы обнаружили новую комнату!", ConsoleColor.Green);
-                    Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
-                    Console.ReadKey(true);
+                    ConsoleHelper.WriteColor(" Вы обнаружили новую комнату!", ConsoleColor.Green);
                 }
                 else
                 {
-                    WriteColor($"👣 Вы переместились в комнату ({newX}, {newY})", ConsoleColor.Gray);
-                    Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
-                    Console.ReadKey(true);
+                    ConsoleHelper.WriteColor($" Вы переместились в комнату ({newX}, {newY})", ConsoleColor.Gray);
                 }
+
+                ProcessCurrentRoom();
             }
             else
             {
-                WriteColor("🚫 Туда нельзя двигаться! Это стена.", ConsoleColor.Red);
+                ConsoleHelper.WriteColor(" Туда нельзя двигаться! Это стена.", ConsoleColor.Red);
                 Console.WriteLine("Нажмите любую клавишу...");
                 Console.ReadKey(true);
+            }
+        }
+
+        private void ProcessCurrentRoom()
+        {
+            var currentRoom = currentDungeon.GetRoom(player.X, player.Y);
+            if (currentRoom == null)
+            {
+                ConsoleHelper.WriteColor("Ошибка: комната не найдена!", ConsoleColor.Red);
+
+                try
+                {
+                    var startRoom = currentDungeon.Rooms.FirstOrDefault(r => r.Type == RoomType.Start);
+                    if (startRoom != null)
+                    {
+                        player.X = startRoom.X;
+                        player.Y = startRoom.Y;
+                        ConsoleHelper.WriteColor("Вы возвращены в стартовую комнату.", ConsoleColor.Yellow);
+                    }
+                    else
+                    {
+                        var anyRoom = currentDungeon.Rooms.FirstOrDefault();
+                        if (anyRoom != null)
+                        {
+                            player.X = anyRoom.X;
+                            player.Y = anyRoom.Y;
+                            ConsoleHelper.WriteColor("Вы перемещены в случайную комнату.", ConsoleColor.Yellow);
+                        }
+                        else
+                        {
+                            ConsoleHelper.WriteColor("Критическая ошибка: в подземелье нет комнат!", ConsoleColor.Red);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ConsoleHelper.WriteColor($"Ошибка при восстановлении позиции: {ex.Message}", ConsoleColor.Red);
+                }
+                return;
+            }
+
+            if (currentRoom.Type != RoomType.Rest)
+            {
+                player.IncrementTurnCounter();
+            }
+
+            switch (currentRoom.Type)
+            {
+                case RoomType.Enemy:
+                    Combat();
+                    break;
+                case RoomType.Boss:
+                    BossFight();
+                    break;
+                case RoomType.Treasure:
+                    LootRoom(currentRoom);
+                    break;
+                case RoomType.Merchant:
+                    VisitMerchant();
+                    break;
+                case RoomType.Rest:
+                    Rest();
+                    break;
+                case RoomType.Exit:
+                    if (ShowVictoryScreen())
+                    {
+                        currentDepth++;
+                        InitializeGame(isNewGame: false);
+                        MarkForClear();
+                    }
+                    else
+                    {
+                        ConsoleHelper.WriteColor("Спасибо за игру! До новых встреч!", ConsoleColor.Green);
+                        return;
+                    }
+                    break;
             }
         }
 
         private void ShowCharacterInfo()
         {
             Console.Clear();
-            WriteColor("╔══════════════════════════════════════════╗", ConsoleColor.Cyan);
-            WriteColor("║           ИНФОРМАЦИЯ О ПЕРСОНАЖЕ        ║", ConsoleColor.Cyan);
-            WriteColor("╚══════════════════════════════════════════╝", ConsoleColor.Cyan);
-            
-            WriteColorInline($"🎯 Имя: ", ConsoleColor.Yellow);
-            WriteColorInline($"{player.Name}\n", ConsoleColor.White);
-            
-            WriteColorInline($"⭐ Уровень: ", ConsoleColor.Yellow);
-            WriteColorInline($"{player.Level}\n", ConsoleColor.White);
-            
-            WriteColorInline($"❤️ Здоровье: ", ConsoleColor.Yellow);
-            WriteColorInline($"{player.Health}/{player.MaxHealth}\n", ConsoleColor.Red);
-            
-            WriteColorInline($"⚔️ Атака: ", ConsoleColor.Yellow);
-            WriteColorInline($"{player.Attack}\n", ConsoleColor.White);
-            
-            WriteColorInline($"💰 Золото: ", ConsoleColor.Yellow);
-            WriteColorInline($"{player.Gold}\n", ConsoleColor.Yellow);
-            
-            WriteColorInline($"📊 Опыт: ", ConsoleColor.Yellow);
-            WriteColorInline($"{player.Experience}/{player.ExperienceToNextLevel}\n", ConsoleColor.Blue);
-            
-            WriteColorInline($"🏰 Глубина подземелья: ", ConsoleColor.Yellow);
-            WriteColorInline($"{currentDepth}\n", ConsoleColor.White);
-            
-            WriteColorInline($"🎒 Размер инвентаря: ", ConsoleColor.Yellow);
-            WriteColorInline($"{player.Inventory.Count}\n", ConsoleColor.White);
+            ConsoleHelper.WriteColor("╔══════════════════════════════════════════╗", ConsoleColor.Cyan);
+            ConsoleHelper.WriteColor("║           ИНФОРМАЦИЯ О ПЕРСОНАЖЕ        ║", ConsoleColor.Cyan);
+            ConsoleHelper.WriteColor("╚══════════════════════════════════════════╝", ConsoleColor.Cyan);
 
-            WriteColor("\nЭкипировка:", ConsoleColor.Cyan);
-            WriteColorInline($"🗡️ Оружие: ", ConsoleColor.Yellow);
-            WriteColorInline($"{(player.EquippedWeapon?.Name ?? "Нет")}\n", ConsoleColor.White);
-            
-            WriteColorInline($"🛡️ Броня: ", ConsoleColor.Yellow);
-            WriteColorInline($"{(player.EquippedArmor?.Name ?? "Нет")}\n", ConsoleColor.White);
+            ConsoleHelper.WriteColorInline($" Имя: ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"{player.Name}\n", ConsoleColor.White);
 
-            WriteColor("\nНажмите любую клавишу чтобы продолжить...", ConsoleColor.Green);
+            ConsoleHelper.WriteColorInline($" Уровень: ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"{player.Level}\n", ConsoleColor.White);
+
+            ConsoleHelper.WriteColorInline($" Здоровье: ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"{player.Health}/{player.MaxHealth}\n", ConsoleColor.Red);
+
+            ConsoleHelper.WriteColorInline($" Атака: ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"{player.Attack}\n", ConsoleColor.White);
+
+            ConsoleHelper.WriteColorInline($" Золото: ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"{player.Gold}\n", ConsoleColor.Yellow);
+
+            ConsoleHelper.WriteColorInline($" Опыт: ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"{player.Experience}/{player.ExperienceToNextLevel}\n", ConsoleColor.Blue);
+
+            ConsoleHelper.WriteColorInline($" Глубина подземелья: ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"{currentDepth}\n", ConsoleColor.White);
+
+            ConsoleHelper.WriteColorInline($" Размер инвентаря: ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"{player.Inventory.Count}\n", ConsoleColor.White);
+
+            ConsoleHelper.WriteColor("\nЭкипировка:", ConsoleColor.Cyan);
+            ConsoleHelper.WriteColorInline($" Оружие: ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"{(player.EquippedWeapon?.Name ?? "Нет")}\n", ConsoleColor.White);
+
+            ConsoleHelper.WriteColorInline($" Броня: ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"{(player.EquippedArmor?.Name ?? "Нет")}\n", ConsoleColor.White);
+
+            ConsoleHelper.WriteColor("\nНажмите любую клавишу чтобы продолжить...", ConsoleColor.Green);
             Console.ReadKey(true);
             MarkForClear();
         }
@@ -1054,46 +1563,73 @@ namespace TextRPG
             var currentRoom = currentDungeon.GetRoom(player.X, player.Y);
             if (currentRoom == null) return;
 
-            int enemyHealth = 30 + (player.Level * 8) + (currentDepth * 5);
-            int enemyAttack = 8 + (player.Level * 3) + (currentDepth * 2);
-            int enemyGold = 10 + (player.Level * 5) + (currentDepth * 3);
+            int enemyLevel = Math.Max(1, player.Level - 1 + currentDepth);
+            int enemyHealth = Math.Min(
+                GameConfig.MinEnemyHealth + (enemyLevel * GameConfig.EnemyHealthPerLevel),
+                GameConfig.MaxEnemyHealth + (currentDepth * 20));
+            int enemyAttack = GameConfig.BaseEnemyAttack + (enemyLevel * GameConfig.EnemyAttackPerLevel);
+            int enemyGold = GameConfig.BaseEnemyGold + (enemyLevel * GameConfig.EnemyGoldPerLevel);
 
-            WriteColor($"\n⚔️ Вы столкнулись с врагом (Ур. {player.Level + currentDepth})!", ConsoleColor.Red);
-            WriteColor($"👹 Здоровье врага: {enemyHealth}, Атака: {enemyAttack}", ConsoleColor.DarkRed);
+            ConsoleHelper.WriteColor($"\n Вы столкнулись с врагом (Ур. {player.Level})!", ConsoleColor.Red);
+            ConsoleHelper.WriteColor($" Здоровье врага: {enemyHealth}, Атака: {enemyAttack}", ConsoleColor.DarkRed);
 
             while (enemyHealth > 0 && player.Health > 0)
             {
-                WriteColor($"\n❤️ Ваше HP: {player.Health}", ConsoleColor.Green);
-                WriteColor($"👹 Враг HP: {enemyHealth}", ConsoleColor.Red);
-                WriteColor("1. ⚔️ Атаковать\n2. 🏃 Бежать (50% шанс)", ConsoleColor.White);
+                ConsoleHelper.WriteColor($"\n Ваше HP: {player.Health}", ConsoleColor.Green);
+                ConsoleHelper.WriteColor($" Враг HP: {enemyHealth}", ConsoleColor.Red);
+                ConsoleHelper.WriteColor("1. Атаковать\n2. Бежать (50% шанс)\n3. Использовать предмет", ConsoleColor.White);
 
                 var choice = Console.ReadLine();
 
-                if (choice == "1")
+                switch (choice)
                 {
-                    int damage = player.Attack + random.Next(-3, 4); // Небольшая вариативность урона
-                    enemyHealth -= damage;
-                    WriteColor($"💥 Вы нанесли {damage} урона!", ConsoleColor.Yellow);
+                    case "1":
+                        int baseDamage = player.Attack;
+                        int variance = random.Next(0, GameConfig.PlayerDamageVariance * 2 + 1) - GameConfig.PlayerDamageVariance;
+                        int damage = Math.Max(1, baseDamage + variance);
+                        enemyHealth -= damage;
+                        ConsoleHelper.WriteColor($" Вы нанесли {damage} урона!", ConsoleColor.Yellow);
 
-                    if (enemyHealth > 0)
-                    {
+                        if (enemyHealth > 0)
+                        {
+                            player.TakeDamage(enemyAttack);
+                            ConsoleHelper.WriteColor($" Враг нанес {enemyAttack} урона!", ConsoleColor.Red);
+                        }
+                        break;
+                    case "2":
+                        if (random.Next(100) < GameConfig.EscapeChance)
+                        {
+                            ConsoleHelper.WriteColor(" Вы успешно сбежали!", ConsoleColor.Green);
+                            return;
+                        }
+                        else
+                        {
+                            ConsoleHelper.WriteColor(" Побег не удался! Враг атакует!", ConsoleColor.Red);
+                            player.TakeDamage(enemyAttack);
+                            ConsoleHelper.WriteColor($" Враг нанес {enemyAttack} урона!", ConsoleColor.Red);
+                        }
+                        break;
+                    case "3":
+                        if (UseItemInCombat())
+                        {
+                            if (enemyHealth > 0)
+                            {
+                                player.TakeDamage(enemyAttack);
+                                ConsoleHelper.WriteColor($" Враг нанес {enemyAttack} урона!", ConsoleColor.Red);
+                            }
+                        }
+                        else
+                        {
+                            player.TakeDamage(enemyAttack);
+                            ConsoleHelper.WriteColor($" Враг нанес {enemyAttack} урона!", ConsoleColor.Red);
+                        }
+                        break;
+
+                    default:
+                        ConsoleHelper.WriteColor("Неверный выбор! Пропускаете ход.", ConsoleColor.Red);
                         player.TakeDamage(enemyAttack);
-                        WriteColor($"💢 Враг нанес {enemyAttack} урона!", ConsoleColor.Red);
-                    }
-                }
-                else if (choice == "2")
-                {
-                    if (random.Next(100) < 50)
-                    {
-                        WriteColor("🏃 Вы успешно сбежали!", ConsoleColor.Green);
-                        return;
-                    }
-                    else
-                    {
-                        WriteColor("💥 Побег не удался! Враг атакует!", ConsoleColor.Red);
-                        player.TakeDamage(enemyAttack);
-                        WriteColor($"💢 Враг нанес {enemyAttack} урона!", ConsoleColor.Red);
-                    }
+                        ConsoleHelper.WriteColor($" Враг нанес {enemyAttack} урона!", ConsoleColor.Red);
+                        break;
                 }
             }
 
@@ -1111,14 +1647,58 @@ namespace TextRPG
                     {
                         player.AddItem(item);
                         currentRoom.Items.Remove(item);
-                        WriteColor($"🎁 Вы нашли {item.Name}!", GetItemColor(item.Type));
+                        ConsoleHelper.WriteColor($" Вы нашли {item.Name}!", GetItemColor(item.Type));
                     }
                 }
 
-                WriteColor("🎉 Враг побежден!", ConsoleColor.Green);
+                ConsoleHelper.WriteColor(" Враг побежден!", ConsoleColor.Green);
             }
             Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
             Console.ReadKey(true);
+        }
+
+        private bool UseItemInCombat()
+        {
+            var potions = player.Inventory.Where(i => i.Type == ItemType.Potion).ToList();
+
+            if (!potions.Any())
+            {
+                ConsoleHelper.WriteColor("У вас нет зелий для использования!", ConsoleColor.Red);
+                return false;
+            }
+
+            ConsoleHelper.WriteColor("\nВыберите зелье для использования:", ConsoleColor.Cyan);
+            for (int i = 0; i < potions.Count; i++)
+            {
+                Console.WriteLine($"{i + 1}. {potions[i].Name} (+{potions[i].Value} HP)");
+            }
+            Console.WriteLine("0. Отмена");
+
+            var input = Console.ReadLine();
+            if (int.TryParse(input, out int choice) && choice > 0 && choice <= potions.Count)
+            {
+                if (choice == 0) return false;
+                if (choice > 0 && choice <= potions.Count)
+                {
+                    var selectedPotion = potions[choice - 1];
+
+                    var potionInventory = player.Inventory.FirstOrDefault(i =>
+                        i.Name == selectedPotion.Name &&
+                        i.Value == selectedPotion.Value &&
+                        i.Type == selectedPotion.Type);
+
+                    if (potionInventory != null)
+                    {
+                        player.Heal(potionInventory.Value);
+                        player.Inventory.Remove(potionInventory);
+                        ConsoleHelper.WriteColor($"Вы использовали {potionInventory.Name}!", ConsoleColor.Green);
+                        return true;
+                    }
+                }
+            }
+
+            ConsoleHelper.WriteColor("Неверный выбор!", ConsoleColor.Red);
+            return false;
         }
 
         private ConsoleColor GetItemColor(ItemType type)
@@ -1136,26 +1716,31 @@ namespace TextRPG
         private bool ShowVictoryScreen()
         {
             Console.Clear();
-            WriteColor(@"
-╔══════════════════════════════════════════╗
-║               🎉 ПОБЕДА! 🎉             ║
-║                                          ║
-║   Вы нашли выход из подземелья!         ║
-║   Ваши достижения:                       ║
-║                                          ║", ConsoleColor.Yellow);
-            
-            WriteColorInline($"   Уровень: {player.Level} ", ConsoleColor.Cyan);
-            WriteColorInline($"Золото: {player.Gold} ", ConsoleColor.Yellow);
-            WriteColorInline($"Глубина: {currentDepth}", ConsoleColor.Green);
+            ConsoleHelper.WriteColor(@"
+        ╔══════════════════════════════════════════╗
+        ║                ПОБЕДА!                  ║
+        ║                                          ║
+        ║   Вы нашли выход из подземелья!         ║
+        ║   Ваши достижения:                       ║
+        ║                                          ║", ConsoleColor.Yellow);
+
+            ConsoleHelper.WriteColorInline($"   Уровень персонажа: {player.Level} ", ConsoleColor.Cyan);
+            ConsoleHelper.WriteColorInline($"Золото: {player.Gold} ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"Глубина: {currentDepth}", ConsoleColor.Green);
             Console.WriteLine();
-            
-            WriteColor(@"
-║                                          ║
-║   Хотите спуститься глубже?             ║
-║   1 - Да, продолжить приключение        ║
-║   2 - Нет, выйти из игры                ║
-║                                          ║
-╚══════════════════════════════════════════╝", ConsoleColor.Yellow);
+
+            ConsoleHelper.WriteColorInline($"   Здоровье: {player.Health}/{player.MaxHealth} ", ConsoleColor.Red);
+            ConsoleHelper.WriteColorInline($"Атака: {player.Attack} ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"Опыт: {player.Experience}/{player.ExperienceToNextLevel}", ConsoleColor.Blue);
+            Console.WriteLine();
+
+            ConsoleHelper.WriteColor(@"
+        ║                                          ║
+        ║   Хотите спуститься глубже?             ║
+        ║   1 - Да, продолжить приключение        ║
+        ║   2 - Нет, выйти из игры                ║
+        ║                                          ║
+        ╚══════════════════════════════════════════╝", ConsoleColor.Yellow);
 
             var choice = Console.ReadLine();
             return choice == "1";
@@ -1164,20 +1749,20 @@ namespace TextRPG
         private void ShowGameOverScreen()
         {
             Console.Clear();
-            WriteColor(@"
+            ConsoleHelper.WriteColor(@"
 ╔══════════════════════════════════════════╗
-║             💀 ИГРА ОКОНЧЕНА 💀         ║
+║              ИГРА ОКОНЧЕНА          ║
 ║                                          ║
 ║        Вы потерпели поражение           ║
 ║                                          ║
 ║         Ваши достижения:                 ║", ConsoleColor.Red);
-            
-            WriteColorInline($"   Уровень: {player.Level} ", ConsoleColor.Cyan);
-            WriteColorInline($"Золото: {player.Gold} ", ConsoleColor.Yellow);
-            WriteColorInline($"Глубина: {currentDepth}", ConsoleColor.Green);
+
+            ConsoleHelper.WriteColorInline($"   Уровень: {player.Level} ", ConsoleColor.Cyan);
+            ConsoleHelper.WriteColorInline($"Золото: {player.Gold} ", ConsoleColor.Yellow);
+            ConsoleHelper.WriteColorInline($"Глубина: {currentDepth}", ConsoleColor.Green);
             Console.WriteLine();
-            
-            WriteColor(@"
+
+            ConsoleHelper.WriteColor(@"
 ║                                          ║
 ║         Попробуйте еще раз!              ║
 ║                                          ║
@@ -1200,6 +1785,97 @@ namespace TextRPG
 
         public Dungeon GenerateDungeon(string name, int maxRooms, int depth = 1)
         {
+            Dungeon dungeon;
+            bool isConnected;
+            int attempts = 0;
+
+            do
+            {
+                dungeon = GenerateDungeonAttempt(name, maxRooms, depth);
+                var startRoom = dungeon.Rooms.FirstOrDefault(r => r.Type == RoomType.Start);
+                var bossRoom = dungeon.Rooms.FirstOrDefault(r => r.Type == RoomType.Boss);
+
+                if (startRoom == null || bossRoom == null)
+                {
+                    isConnected = false;
+                    continue;
+                }
+
+                isConnected = IsDungeonConnected(dungeon, startRoom, bossRoom);
+                attempts++;
+
+                if (attempts >= GameConfig.MaxDugeonGenerationAttempts - 1 && !isConnected)
+                {
+                    return CreateFallbackDungeon(name, maxRooms, depth);
+                }
+
+            } while (!isConnected && attempts < GameConfig.MaxDugeonGenerationAttempts);
+
+            if (!isConnected)
+            {
+                ConsoleHelper.WriteColor($"Внимание: не удалось создать идеальное подземелье после {attempts} попыток", ConsoleColor.Yellow);
+            }
+            return dungeon;
+        }
+
+        private Dungeon CreateFallbackDungeon(string name, int maxRooms, int depth)
+        {
+            var dungeon = new Dungeon(name + " (Fallback)", width, height, depth);
+
+            var startRoom = new Room(0, 0, RoomType.Start);
+            dungeon.AddRoom(startRoom);
+
+            var bossRoom = new Room(width - 1, height - 1, RoomType.Boss);
+            dungeon.AddRoom(bossRoom);
+
+            for (int x = 0; x < width; x++)
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    if ((x == 0 && y == 0) || (x == width - 1 && y == height - 1)) continue;
+
+                    var roomType = RoomType.Empty;
+                    if (random.Next(100) < 30) roomType = RoomType.Enemy;
+                    else if (random.Next(100) < 10) roomType = RoomType.Treasure;
+
+                    var room = new Room(x, y, roomType);
+                    dungeon.AddRoom(room);
+                }
+            }
+
+            return dungeon;
+        }
+
+        private bool IsDungeonConnected(Dungeon dungeon, Room startRoom, Room exitRoom)
+        {
+            var visited = new HashSet<Room>();
+            var queue = new Queue<Room>();
+
+            queue.Enqueue(startRoom);
+            visited.Add(startRoom);
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                if (current == exitRoom) return true;
+
+                var neighbors = new (int, int)[] { (1, 0), (-1, 0), (0, 1), (0, -1) };
+                foreach (var (dx, dy) in neighbors)
+                {
+                    var neighbor = dungeon.GetRoom(current.X + dx, current.Y + dy);
+                    if (neighbor != null && !visited.Contains(neighbor))
+                    {
+                        visited.Add(neighbor);
+                        queue.Enqueue(neighbor);
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        public Dungeon GenerateDungeonAttempt(string name, int maxRooms, int depth = 1)
+        {
             var dungeon = new Dungeon(name, width, height, depth);
             var visited = new bool[width, height];
 
@@ -1209,11 +1885,14 @@ namespace TextRPG
             var rooms = new List<Room>();
             var startRoom = new Room(x, y, RoomType.Empty);
             dungeon.AddRoom(startRoom);
+            rooms.Add(startRoom);
             visited[x, y] = true;
 
             int roomCreated = 1;
+            int attemptsWithoutProgress = 0;
+            const int maxAttemptsWithoutProgress = 100;
 
-            while (roomCreated < maxRooms)
+            while (roomCreated < maxRooms && attemptsWithoutProgress < maxAttemptsWithoutProgress)
             {
                 int direction = random.Next(4);
                 int newX = x, newY = y;
@@ -1237,18 +1916,39 @@ namespace TextRPG
                         roomCreated++;
                         x = newX;
                         y = newY;
+                        attemptsWithoutProgress = 0;
                     }
+                    else
+                    {
+                        attemptsWithoutProgress++;
+                    }
+                }
+                else
+                {
+                    attemptsWithoutProgress++;
                 }
             }
 
             startRoom.Type = RoomType.Start;
 
-            var bossRoom = rooms.OrderByDescending(r => Math.Abs(r.X - startRoom.X) + Math.Abs(r.Y - startRoom.Y)).First();
-            bossRoom.Type = RoomType.Boss;
+            var bossRoom = rooms.Where(r => r != startRoom).OrderByDescending(r => Math.Abs(r.X - startRoom.X) + Math.Abs(r.Y - startRoom.Y)).FirstOrDefault();
+            if (bossRoom == null)
+            {
+                bossRoom = rooms.FirstOrDefault(r => r != startRoom);
+            }
 
-            var exitCandidates = rooms.Where(r => Math.Abs(r.X - bossRoom.X) + Math.Abs(r.Y - bossRoom.Y) == 1 && r.Type == RoomType.Empty);
-            var exitRoom = exitCandidates.FirstOrDefault() ?? bossRoom;
-            exitRoom.Type = RoomType.Exit;
+            if (bossRoom == null)
+            {
+                int bossX = (x + 1) % width;
+                int bossY = (y + 1) % height;
+                bossRoom = new Room(bossX, bossY, RoomType.Boss);
+                dungeon.AddRoom(bossRoom);
+                rooms.Add(bossRoom);
+            }
+            else
+            {
+                bossRoom.Type = RoomType.Boss;
+            }
 
             var deadEnds = rooms.Where(r => r.Type == RoomType.Empty && CountNeighbors(dungeon, r) == 1).ToList();
             foreach (var room in deadEnds.Take(Math.Min(3, deadEnds.Count)))
@@ -1272,10 +1972,13 @@ namespace TextRPG
         private int CountNeighbors(Dungeon dungeon, Room room)
         {
             int count = 0;
-            if (dungeon.GetRoom(room.X + 1, room.Y) != null) count++;
-            if (dungeon.GetRoom(room.X - 1, room.Y) != null) count++;
-            if (dungeon.GetRoom(room.X, room.Y + 1) != null) count++;
-            if (dungeon.GetRoom(room.X, room.Y - 1) != null) count++;
+            var neighbors = new (int, int)[] { (1, 0), (-1, 0), (0, 1), (0, -1) };
+            
+            foreach (var (dx, dy) in neighbors)
+            {
+                var neighbor = dungeon.GetRoom(room.X + dx, room.Y + dy);
+                if (neighbor != null) count++;
+            }
             return count;
         }
 
@@ -1284,21 +1987,27 @@ namespace TextRPG
             int distanceToBoss = Math.Abs(room.X - bossRoom.X) + Math.Abs(room.Y - bossRoom.Y);
             int roll = random.Next(100);
 
-            // С увеличением глубины больше врагов и сокровищ
-            int enemyChance = 40 + (depth * 5);
-            int treasureChance = 20 + (depth * 3);
+            int enemyChance = GameConfig.BaseEmptyRoomChance + (depth * 5);
+            int treasureChance = GameConfig.BaseTreasureRoomChance + (depth * 3);
+            int merchantChance = GameConfig.BaseMerchantRoomChance;
+            int restChance = GameConfig.BaseRestRoomChance;
 
-            if (distanceToBoss <= 2) 
+            if (distanceToBoss <= 2)
             {
                 if (roll < enemyChance) return RoomType.Enemy;
                 if (roll < enemyChance + treasureChance) return RoomType.Treasure;
+                if (roll < enemyChance + treasureChance + merchantChance) return RoomType.Merchant;
+                if (roll < enemyChance + treasureChance + merchantChance + restChance) return RoomType.Rest;
                 return RoomType.Empty;
             }
-            else 
+            else
             {
-                if (roll < 30) return RoomType.Empty;
-                if (roll < 30 + enemyChance) return RoomType.Enemy;
-                if (roll < 30 + enemyChance + treasureChance) return RoomType.Treasure;
+                int emptyChance = GameConfig.BaseEmptyRoomChance;
+                if (roll < emptyChance) return RoomType.Empty;
+                if (roll < emptyChance + enemyChance) return RoomType.Enemy;
+                if (roll < emptyChance + enemyChance + treasureChance) return RoomType.Treasure;
+                if (roll < emptyChance + enemyChance + treasureChance + merchantChance) return RoomType.Merchant;
+                if (roll < emptyChance + enemyChance + treasureChance + merchantChance + restChance) return RoomType.Rest;
                 return RoomType.Empty;
             }
         }
@@ -1308,19 +2017,14 @@ namespace TextRPG
             switch (room.Type)
             {
                 case RoomType.Treasure:
-                    var treasure = new Item("Золотой нагрудник", room.X, room.Y, 
+                    string[] treasureNames = { "Золотой нагрудник", "Магический амулет", "Шлем воина" };
+                    string treasureName = treasureNames[random.Next(treasureNames.Length)];
+
+                    var treasure = new Item(treasureName, room.X, room.Y,
                         30 + (depth * 10), ItemType.Treasure, EquipmentType.Armor, ConsoleColor.Magenta);
                     room.AddItem(treasure);
-                    
-                    // Добавляем золото в сокровищницу
-                    if (random.Next(100) < 80)
-                    {
-                        var gold = new Item("Мешок золота", room.X, room.Y, 
-                            50 + (depth * 20), ItemType.Treasure, EquipmentType.Other, ConsoleColor.Yellow);
-                        room.AddItem(gold);
-                    }
                     break;
-                    
+
                 case RoomType.Enemy:
                     if (random.Next(100) < 70)
                     {
@@ -1331,34 +2035,34 @@ namespace TextRPG
                             2 => ItemType.Scroll,
                             _ => ItemType.Treasure
                         };
-                        
+
                         var item = itemType switch
                         {
-                            ItemType.Weapon => new Item("Стальной меч", room.X, room.Y, 
+                            ItemType.Weapon => new Item("Стальной меч", room.X, room.Y,
                                 20 + (depth * 5), itemType, EquipmentType.Weapon, ConsoleColor.Yellow),
-                            ItemType.Potion => new Item("Большое зелье", room.X, room.Y, 
+                            ItemType.Potion => new Item("Большое зелье", room.X, room.Y,
                                 30 + (depth * 8), itemType, EquipmentType.Other, ConsoleColor.Green),
-                            ItemType.Scroll => new Item("Свиток телепортации", room.X, room.Y, 
+                            ItemType.Scroll => new Item("Свиток телепортации", room.X, room.Y,
                                 15, itemType, EquipmentType.Other, ConsoleColor.Blue),
-                            _ => new Item("Драгоценный камень", room.X, room.Y, 
+                            _ => new Item("Драгоценный камень", room.X, room.Y,
                                 40 + (depth * 10), itemType, EquipmentType.Other, ConsoleColor.Magenta)
                         };
                         room.AddItem(item);
                     }
                     break;
-                    
+
                 case RoomType.Boss:
-                    var potion = new Item("Эликсир здоровья", room.X, room.Y, 
+                    var potion = new Item("Эликсир здоровья", room.X, room.Y,
                         60 + (depth * 15), ItemType.Potion, EquipmentType.Other, ConsoleColor.Green);
                     room.AddItem(potion);
-                    
-                    var weapon = new Item("Легендарный меч", room.X, room.Y, 
+
+                    var weapon = new Item("Легендарный меч", room.X, room.Y,
                         50 + (depth * 20), ItemType.Weapon, EquipmentType.Weapon, ConsoleColor.Yellow);
                     room.AddItem(weapon);
                     break;
-                    
+
                 case RoomType.Start:
-                    var startPotion = new Item("Малое зелье здоровья", room.X, room.Y, 
+                    var startPotion = new Item("Малое зелье здоровья", room.X, room.Y,
                         25, ItemType.Potion, EquipmentType.Other, ConsoleColor.Green);
                     room.AddItem(startPotion);
                     break;
@@ -1372,21 +2076,55 @@ namespace TextRPG
         {
             Console.Title = "Текстовая RPG - Подземелье";
             Console.CursorVisible = true;
-            
-            try
+
+            int attempts = 0;
+            const int maxAttempts = 3;
+            bool gameCompletedSuccessfully = false;
+
+            while (attempts < maxAttempts && !gameCompletedSuccessfully)
             {
-                var game = new Game();
-                game.Start();
+                try
+                {
+                    var game = new Game();
+                    game.Start();
+                    gameCompletedSuccessfully = true;
+                }
+                catch (Exception ex)
+                {
+                    attempts++;
+                    Console.Clear();
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"Произошла ошибка в игре (попытка {attempts}/{maxAttempts})");
+                    Console.WriteLine(ex.Message);
+
+#if DEBUG
+                    Console.WriteLine("\nStack Trace:");
+                    Console.WriteLine(ex.StackTrace);
+#endif
+
+                    Console.ResetColor();
+
+                    if (attempts < maxAttempts)
+                    {
+                        Console.WriteLine($"\nПерезапуск игры через 3 секунды...");
+                        for (int i = 3; i > 0; i--)
+                        {
+                            Console.WriteLine($"{i}...");
+                            Thread.Sleep(1000);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("\nИгра завершена из-за критических ошибок.");
+                        Console.WriteLine("Нажмите любую клавишу для выхода...");
+                        Console.ReadKey();
+                    }
+                }
             }
-            catch (Exception ex)
+
+            if (gameCompletedSuccessfully)
             {
-                Console.Clear();
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Произошла ошибка в игре:");
-                Console.WriteLine(ex.Message);
-                Console.ResetColor();
-                Console.WriteLine("\nНажмите любую клавишу для выхода...");
-                Console.ReadKey();
+                Console.WriteLine("\nИгра завершена успешно! Спасибо за игру!");
             }
         }
     }
