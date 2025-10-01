@@ -1,0 +1,15 @@
+/home/oleg/vs_csharp/csharp/rpg_game/bin/Debug/net8.0/rpg_game
+/home/oleg/vs_csharp/csharp/rpg_game/bin/Debug/net8.0/rpg_game.deps.json
+/home/oleg/vs_csharp/csharp/rpg_game/bin/Debug/net8.0/rpg_game.runtimeconfig.json
+/home/oleg/vs_csharp/csharp/rpg_game/bin/Debug/net8.0/rpg_game.dll
+/home/oleg/vs_csharp/csharp/rpg_game/bin/Debug/net8.0/rpg_game.pdb
+/home/oleg/vs_csharp/csharp/rpg_game/obj/Debug/net8.0/rpg_game.GeneratedMSBuildEditorConfig.editorconfig
+/home/oleg/vs_csharp/csharp/rpg_game/obj/Debug/net8.0/rpg_game.AssemblyInfoInputs.cache
+/home/oleg/vs_csharp/csharp/rpg_game/obj/Debug/net8.0/rpg_game.AssemblyInfo.cs
+/home/oleg/vs_csharp/csharp/rpg_game/obj/Debug/net8.0/rpg_game.csproj.CoreCompileInputs.cache
+/home/oleg/vs_csharp/csharp/rpg_game/obj/Debug/net8.0/rpg_game.sourcelink.json
+/home/oleg/vs_csharp/csharp/rpg_game/obj/Debug/net8.0/rpg_game.dll
+/home/oleg/vs_csharp/csharp/rpg_game/obj/Debug/net8.0/refint/rpg_game.dll
+/home/oleg/vs_csharp/csharp/rpg_game/obj/Debug/net8.0/rpg_game.pdb
+/home/oleg/vs_csharp/csharp/rpg_game/obj/Debug/net8.0/rpg_game.genruntimeconfig.cache
+/home/oleg/vs_csharp/csharp/rpg_game/obj/Debug/net8.0/ref/rpg_game.dll
