@@ -557,7 +557,7 @@ namespace TextRPG
                     }
                     else
                     {
-                        ConsoleHelper.WriteColorInline("# ", ConsoleColor.DarkGray); // Стена/неизвестная область
+                        ConsoleHelper.WriteColorInline("# ", ConsoleColor.DarkGray);
                     }
                 }
                 Console.WriteLine();
@@ -566,16 +566,6 @@ namespace TextRPG
             Console.WriteLine("\nЛегенда:");
             ConsoleHelper.WriteColorInline("P - Вы ", ConsoleColor.Green);
             ConsoleHelper.WriteColorInline("S - Старт ", ConsoleColor.Blue);
-
-            if (isExitActive)
-            {
-                ConsoleHelper.WriteColorInline("E - Выход (активен) ", ConsoleColor.Yellow);
-            }
-            else
-            {
-                ConsoleHelper.WriteColorInline("E - Выход (заблокирован) ", ConsoleColor.DarkYellow);
-            }
-
             ConsoleHelper.WriteColorInline("M - Враг ", ConsoleColor.Red);
             ConsoleHelper.WriteColorInline("T - Сокровище ", ConsoleColor.Magenta);
             ConsoleHelper.WriteColorInline("B - Босс ", ConsoleColor.DarkRed);
@@ -2097,10 +2087,10 @@ namespace TextRPG
                     Console.WriteLine($"Произошла ошибка в игре (попытка {attempts}/{maxAttempts})");
                     Console.WriteLine(ex.Message);
 
-#if DEBUG
+                    #if DEBUG
                     Console.WriteLine("\nStack Trace:");
                     Console.WriteLine(ex.StackTrace);
-#endif
+                    #endif
 
                     Console.ResetColor();
 
