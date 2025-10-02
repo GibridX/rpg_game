@@ -1,6 +1,6 @@
 # TextRPG - Текстовая RPG игра
 
-![Gameplay Screenshot](./TextRPG/docs/media/screenshots/Снимок%20экрана%20от%202025-10-01%2017-20-37.png)
+![Gameplay Screenshot](./TextRPG/docs/media/screenshots/gamescreen.png)
 
 *Подземелья, сражения и сокровища в консольной RPG*
 
