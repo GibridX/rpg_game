@@ -40,63 +40,6 @@ namespace TextRPG
         public static int BossAttackMultiplier = 3;
     }
 
-    public abstract class GameObject : IEquatable<GameObject>
-    {
-        public string Name { get; protected set; }
-        public int X { get; set; }
-        public int Y { get; set; }
-
-        protected GameObject(string name, int x, int y)
-        {
-            Name = name;
-            X = x;
-            Y = y;
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return Equals(obj as GameObject);
-        }
-
-        public bool Equals(GameObject? other)
-        {
-            return other != null && Name == other.Name
-            && X == other.X && Y == other.Y;
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(Name, X, Y);
-        }
-
-        public override string ToString()
-        {
-            return $"{Name} на ({X}, {Y})";
-        }
-    }
-
-    public enum RoomType
-    {
-        Empty,
-        Enemy,
-        Treasure,
-        Boss,
-        Start,
-        Exit,
-        Merchant,
-        Rest
-    }
-
-    public enum ItemType
-    {
-        Weapon,
-        Potion,
-        Treasure,
-        Scroll
-    }
-
-    public enum EquipmentType { Weapon, Armor, Other }
-
     public class Player : GameObject, IEquatable<Player>
     {
         public int Health { get; set; }
@@ -607,55 +550,6 @@ namespace TextRPG
         }
     }
     
-    public static class ConsoleHelper
-    {
-        public static void WriteColor(string text, ConsoleColor color)
-        {
-            var originalColor = Console.ForegroundColor;
-            Console.ForegroundColor = color;
-            Console.WriteLine(text);
-            Console.ForegroundColor = originalColor;
-        }
-
-        public static void WriteColorInline(string text, ConsoleColor color)
-        {
-            var originalColor = Console.ForegroundColor;
-            Console.ForegroundColor = color;
-            Console.Write(text);
-            Console.ForegroundColor = originalColor;
-        }
-    }
-    
-    public static class SimpleHotkeyHandler
-    {
-        public static bool CheckForHotkeys()
-        {
-            if (Console.KeyAvailable)
-            {
-                var key = Console.ReadKey(true);
-                
-                if ((key.Modifiers & ConsoleModifiers.Control) != 0)
-                {
-                    switch (key.Key)
-                    {
-                        case ConsoleKey.D:
-                            HandleCtrlD();
-                            return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        private static void HandleCtrlD()
-        {
-            Console.WriteLine();
-            ConsoleHelper.WriteColor("[Ctrl+D] Отладочная информация - функция в разработке", ConsoleColor.Yellow);
-            ConsoleHelper.WriteColor("Нажмите любую клавишу чтобы продолжить...", ConsoleColor.Gray);
-            Console.ReadKey(true);
-        }
-    }
-
     public class Game
     {
         private Player player = null!;
