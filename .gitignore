@@ -1,8 +1,0 @@
-[Bb]in/
-[Oo]bj/
-*.dll
-*pdb
-*.exe
-*.cache
-*.log
-/.vs
