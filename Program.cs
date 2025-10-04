@@ -159,7 +159,7 @@ namespace TextRPG
         {
             Experience += exp;
             Console.WriteLine($"Получено {exp} опыта! Всего: {Experience}/{ExperienceToNextLevel}");
-            
+
             while (Experience >= ExperienceToNextLevel)
             {
                 LevelUp();
@@ -176,7 +176,7 @@ namespace TextRPG
             Level++;
             Experience -= ExperienceToNextLevel;
             ExperienceToNextLevel = (int)(ExperienceToNextLevel * 2);
-            
+
             BaseAttack += 3;
             BaseMaxHealth += 20;
 
@@ -191,7 +191,7 @@ namespace TextRPG
                 if (Health > MaxHealth) Health = MaxHealth;
                 if (Health < 0) Health = 0;
             }
-            
+
             Console.WriteLine($"╔══════════════════════════════════════╗", ConsoleColor.Yellow);
             ConsoleHelper.WriteColor($"║          УРОВЕНЬ ПОВЫШЕН! {Level}           ║", ConsoleColor.Yellow);
             ConsoleHelper.WriteColor($"║  HP: +20  АТК: +3  Макс.Опыт: {ExperienceToNextLevel} ║", ConsoleColor.Yellow);
@@ -207,7 +207,7 @@ namespace TextRPG
                 actualDamage = damage / 2;
                 ConsoleHelper.WriteColor(" Уклонение! Урон уменьшен вдвое.", ConsoleColor.Cyan);
             }
-            
+
             Health = Math.Max(0, Health - actualDamage);
         }
 
@@ -215,7 +215,7 @@ namespace TextRPG
         {
             int newHealth = Health + amount;
             int actualHeal = amount;
-            
+
             if (newHealth > MaxHealth)
             {
                 actualHeal = MaxHealth - Health;
@@ -337,8 +337,8 @@ namespace TextRPG
         public EquipmentType EquipmentType { get; set; }
         public ConsoleColor Color { get; set; }
 
-        public Item(string name, int x, int y, int value, ItemType type, 
-                   EquipmentType equipType = EquipmentType.Other, 
+        public Item(string name, int x, int y, int value, ItemType type,
+                   EquipmentType equipType = EquipmentType.Other,
                    ConsoleColor color = ConsoleColor.White) : base(name, x, y)
         {
             Value = Math.Max(0, value);
@@ -526,7 +526,7 @@ namespace TextRPG
             };
         }
     }
-    
+
     public static class ConsoleHelper
     {
         public static void WriteColor(string text, ConsoleColor color)
@@ -545,7 +545,7 @@ namespace TextRPG
             Console.ForegroundColor = originalColor;
         }
     }
-    
+
     public static class SimpleHotkeyHandler
     {
         public static bool CheckForHotkeys()
@@ -553,7 +553,7 @@ namespace TextRPG
             if (Console.KeyAvailable)
             {
                 var key = Console.ReadKey(true);
-                
+
                 if ((key.Modifiers & ConsoleModifiers.Control) != 0)
                 {
                     switch (key.Key)
@@ -1883,7 +1883,7 @@ namespace TextRPG
         {
             int count = 0;
             var neighbors = new (int, int)[] { (1, 0), (-1, 0), (0, 1), (0, -1) };
-            
+
             foreach (var (dx, dy) in neighbors)
             {
                 var neighbor = dungeon.GetRoom(room.X + dx, room.Y + dy);
