@@ -1,102 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using TextRPG.Config;
+using TextRPG.Core.Enums;
+using TextRPG.Core.Models;
 
 namespace TextRPG
 {
-
-    public static class GameConfig
-    {
-        public static int BasePlayerHealth = 100;
-        public static int BasePlayerAttack = 10;
-        public static int PlayerDamageVariance = 3;
-        public static int ExpForNextLevelMultiplier = 2;
-        public static int RestRoomCooldown = 5;
-        public static int MaxInventorySize = 20;
-        public static int MaxPlayerLevel = 25;
-
-        public static int MinEnemyHealth = 30;
-        public static int MaxEnemyHealth = 200;
-        public static int EnemyHealthPerLevel = 6;
-        public static int EnemyAttackPerLevel = 2;
-        public static int BaseEnemyAttack = 8;
-        public static int BaseEnemyGold = 10;
-        public static int EnemyGoldPerLevel = 4;
-
-        public static int EscapeChance = 50;
-        public static int DodgePerLevel = 2;
-
-        public static int BaseEmptyRoomChance = 25;
-        public static int BaseEnemyRoomChance = 20;
-        public static int BaseTreasureRoomChance = 10;
-        public static int BaseMerchantRoomChance = 5;
-        public static int BaseRestRoomChance = 5;
-
-        public static int MaxDugeonGenerationAttempts = 10;
-        public static int EnemyChance = 20;
-        public static int TreasureChance = 10;
-
-        public static int BossHealthMuliplier = 10;
-        public static int BossAttackMultiplier = 3;
-    }
-
-    public abstract class GameObject : IEquatable<GameObject>
-    {
-        public string Name { get; protected set; }
-        public int X { get; set; }
-        public int Y { get; set; }
-
-        protected GameObject(string name, int x, int y)
-        {
-            Name = name;
-            X = x;
-            Y = y;
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return Equals(obj as GameObject);
-        }
-
-        public bool Equals(GameObject? other)
-        {
-            return other != null && Name == other.Name
-            && X == other.X && Y == other.Y;
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(Name, X, Y);
-        }
-
-        public override string ToString()
-        {
-            return $"{Name} на ({X}, {Y})";
-        }
-    }
-
-    public enum RoomType
-    {
-        Empty,
-        Enemy,
-        Treasure,
-        Boss,
-        Start,
-        Exit,
-        Merchant,
-        Rest
-    }
-
-    public enum ItemType
-    {
-        Weapon,
-        Potion,
-        Treasure,
-        Scroll
-    }
-
-    public enum EquipmentType { Weapon, Armor, Other }
-
     public class Player : GameObject, IEquatable<Player>
     {
         public int Health { get; set; }
