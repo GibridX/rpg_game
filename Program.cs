@@ -7,525 +7,6 @@ using TextRPG.Core.Models;
 
 namespace TextRPG
 {
-    public class Player : GameObject, IEquatable<Player>
-    {
-        public int Health { get; set; }
-        public int BaseAttack { get; private set; }
-        public int MaxHealth { get; set; }
-        public int BaseMaxHealth { get; private set; }
-        public int Attack { get; set; }
-        public int Level { get; set; }
-        public int Experience { get; set; }
-        public int ExperienceToNextLevel { get; set; }
-        public int Gold { get; set; }
-        public int TurnsSinceLastRest { get; set; } = -1;
-        public List<Item> Inventory { get; private set; }
-        public Item? EquippedWeapon { get; private set; }
-        public Item? EquippedArmor { get; private set; }
-
-        public Player(string name, int x, int y) : base(name, x, y)
-        {
-            BaseMaxHealth = 100;
-            MaxHealth = BaseMaxHealth;
-            Health = MaxHealth;
-            BaseAttack = 10;
-            Attack = BaseAttack;
-            Level = 1;
-            Experience = 0;
-            ExperienceToNextLevel = 50;
-            Gold = 0;
-            Inventory = new List<Item>();
-        }
-
-        public void IncrementTurnCounter()
-        {
-            if (TurnsSinceLastRest >= 0)
-            {
-                TurnsSinceLastRest++;
-            }
-        }
-
-        public void ActivateRestCooldown()
-        {
-            TurnsSinceLastRest = 0;
-        }
-
-        public static class InventoryHelper
-        {
-            public static void DisplayInventory(Player player)
-            {
-                Console.WriteLine("\n=== Инвентарь ===");
-                Console.WriteLine($"Оружие: {(player.EquippedWeapon?.Name ?? "Нет")}");
-                Console.WriteLine($"Броня: {(player.EquippedArmor?.Name ?? "Нет")}");
-                Console.WriteLine();
-
-                if (!player.Inventory.Any())
-                {
-                    Console.WriteLine("Ваш инвентарь пуст.");
-                }
-                else
-                {
-                    for (int i = 0; i < player.Inventory.Count; i++)
-                    {
-                        string equippedMark = player.Inventory[i] == player.EquippedWeapon ||
-                                            player.Inventory[i] == player.EquippedArmor ? " [Экипировано]" : "";
-                        Console.WriteLine($"{i + 1}. {player.Inventory[i]}{equippedMark}");
-                    }
-                }
-            }
-
-            public static bool IsValidInventoryChoice(string input, int inventoryCount)
-            {
-                if (input == "0" || input == "u") return true;
-                return int.TryParse(input, out int choice) && choice > 0 && choice <= inventoryCount;
-            }
-        }
-
-        public void EquipItem(Item item)
-        {
-
-            if (!Inventory.Contains(item))
-            {
-                Console.WriteLine("Предмет не найден в инвентаре!");
-                return;
-            }
-
-            Item? oldEquipment = null;
-            bool equipSuccess = false;
-
-            switch (item.Type)
-            {
-                case ItemType.Weapon when item.EquipmentType == EquipmentType.Weapon:
-                    oldEquipment = EquippedWeapon;
-                    EquippedWeapon = item;
-                    Attack = BaseAttack + item.Value;
-                    Console.WriteLine($"Вы экипировали {item.Name} (+{item.Value} к атаке)");
-                    equipSuccess = true;
-                    break;
-                case ItemType.Treasure when item.EquipmentType == EquipmentType.Armor:
-                    oldEquipment = EquippedArmor;
-                    EquippedArmor = item;
-                    double healthPercent = (double)Health / MaxHealth;
-                    MaxHealth = BaseMaxHealth + item.Value;
-                    Health = (int)(MaxHealth * healthPercent);
-                    if (Health <= 0) Health = 1;
-                    Console.WriteLine($"Вы экипировали {item.Name} (+{item.Value} к максимальному HP)");
-                    equipSuccess = true;
-                    break;
-                default:
-                    Console.WriteLine("Этот предмет нельзя экипировать.");
-                    return;
-            }
-
-            if (equipSuccess)
-            {
-                Inventory.Remove(item);
-
-                if (oldEquipment != null)
-                {
-                    Inventory.Add(oldEquipment);
-                    UnequipItem(oldEquipment, silent: true);
-                }
-            }
-        }
-
-        public void UnequipItem(Item item, bool silent = false)
-        {
-            switch (item.Type)
-            {
-                case ItemType.Weapon when item == EquippedWeapon:
-                    EquippedWeapon = null;
-                    Attack = BaseAttack;
-                    if (!silent)
-                    {
-                        Console.WriteLine($"Вы сняли {item.Name}");
-                    }
-                    break;
-                case ItemType.Treasure when item == EquippedArmor:
-                    EquippedArmor = null;
-                    double healthPercent = (double)Health / MaxHealth;
-                    MaxHealth = BaseMaxHealth;
-                    Health = (int)(MaxHealth * healthPercent);
-                    Health = Math.Max(1, Math.Min(Health, MaxHealth));
-                    if (!silent)
-                    {
-                        Console.WriteLine($"Вы сняли {item.Name}");
-                    }
-                    break;
-            }
-        }
-
-        public void AddExperience(int exp)
-        {
-            Experience += exp;
-            Console.WriteLine($"Получено {exp} опыта! Всего: {Experience}/{ExperienceToNextLevel}");
-
-            while (Experience >= ExperienceToNextLevel)
-            {
-                LevelUp();
-            }
-        }
-
-        public void LevelUp()
-        {
-            if (Level >= GameConfig.MaxPlayerLevel)
-            {
-                ConsoleHelper.WriteColor("Вы достигли максимального уровня!", ConsoleColor.Yellow);
-                return;
-            }
-            Level++;
-            Experience -= ExperienceToNextLevel;
-            ExperienceToNextLevel = (int)(ExperienceToNextLevel * 2);
-
-            BaseAttack += 3;
-            BaseMaxHealth += 20;
-
-            Attack = BaseAttack + (EquippedWeapon?.Value ?? 0);
-            int oldMaxHealth = MaxHealth;
-            MaxHealth = BaseMaxHealth + (EquippedArmor?.Value ?? 0);
-
-            if (oldMaxHealth > 0)
-            {
-                int healthDifference = MaxHealth - oldMaxHealth;
-                Health += healthDifference;
-                if (Health > MaxHealth) Health = MaxHealth;
-                if (Health < 0) Health = 0;
-            }
-
-            Console.WriteLine($"╔══════════════════════════════════════╗", ConsoleColor.Yellow);
-            ConsoleHelper.WriteColor($"║          УРОВЕНЬ ПОВЫШЕН! {Level}           ║", ConsoleColor.Yellow);
-            ConsoleHelper.WriteColor($"║  HP: +20  АТК: +3  Макс.Опыт: {ExperienceToNextLevel} ║", ConsoleColor.Yellow);
-            Console.WriteLine($"╚══════════════════════════════════════╝", ConsoleColor.Yellow);
-        }
-
-        public void TakeDamage(int damage)
-        {
-            int actualDamage = damage;
-
-            if (random.Next(100) < (Level * GameConfig.DodgePerLevel))
-            {
-                actualDamage = damage / 2;
-                ConsoleHelper.WriteColor(" Уклонение! Урон уменьшен вдвое.", ConsoleColor.Cyan);
-            }
-
-            Health = Math.Max(0, Health - actualDamage);
-        }
-
-        public void Heal(int amount)
-        {
-            int newHealth = Health + amount;
-            int actualHeal = amount;
-
-            if (newHealth > MaxHealth)
-            {
-                actualHeal = MaxHealth - Health;
-                Health = MaxHealth;
-            }
-            else
-            {
-                Health = newHealth;
-            }
-            ConsoleHelper.WriteColor($" Восстановлено {actualHeal} HP. Теперь HP: {Health}/{MaxHealth}", ConsoleColor.Green);
-        }
-
-        public void AddGold(int amount)
-        {
-            Gold += amount;
-            ConsoleHelper.WriteColor($" Найдено {amount} золота! Всего: {Gold}", ConsoleColor.Yellow);
-        }
-
-        public void AddItem(Item item)
-        {
-            if (Inventory.Count >= GameConfig.MaxInventorySize)
-            {
-                ConsoleHelper.WriteColor("Инвентарь полон! Вы не можете поднять этот предмет.", ConsoleColor.Red);
-                return;
-            }
-            Inventory.Add(item);
-        }
-
-        private Random random = new Random();
-
-        public override bool Equals(object? obj)
-        {
-            return Equals(obj as Player);
-        }
-
-        public bool Equals(Player? other)
-        {
-            return base.Equals(other) &&
-                Health == other.Health &&
-                MaxHealth == other.MaxHealth &&
-                Attack == other.Attack &&
-                Level == other.Level;
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(base.GetHashCode(), Health, MaxHealth, Attack, Level);
-        }
-
-        public override string ToString()
-        {
-            return $"{Name} (Ур. {Level}) - HP: {Health}/{MaxHealth} АТК: {Attack} Золото: {Gold}";
-        }
-    }
-
-    public class Room : GameObject, IEquatable<Room>
-    {
-        public RoomType Type { get; set; }
-        public bool IsExplored { get; set; }
-        public List<Item> Items { get; private set; }
-        public string Description { get; set; }
-
-        public Room(int x, int y, RoomType type) : base($"Комната_{x}_{y}", x, y)
-        {
-            Type = type;
-            IsExplored = false;
-            Items = new List<Item>();
-            Description = GetDefaultDescription(type);
-        }
-
-        private string GetDefaultDescription(RoomType type)
-        {
-            return type switch
-            {
-                RoomType.Start => "Вы стоите у входа в древнее подземелье. Стены покрыты мхом, а воздух пахнет пылью и тайнами.",
-                RoomType.Exit => "Перед вами сияющий портал выхода! Свет исходящий от него обещает свободу и спасение.",
-                RoomType.Enemy => "Комната заполнена костями предыдущих авантюриеров. В воздухе витает опасность...",
-                RoomType.Treasure => "Блеск золота и драгоценностей слепит глаза. Сокровищница полна богатств!",
-                RoomType.Boss => "Огромное логово с костями гигантских существ. Здесь обитает нечто ужасное...",
-                RoomType.Empty => "Пустая каменная комната. Тишина нарушается лишь эхом ваших шагов.",
-                RoomType.Merchant => "В центре комнаты стоит сидит загадочный торговец, разложивший свои товары на разодранном покрывале.",
-                RoomType.Rest => "Тихая и освещённая комната. Мягкий свет факелов и спокойная атмосфера навевают чувство безопасности.",
-                _ => "Неизвестное место."
-            };
-        }
-
-        public void AddItem(Item item)
-        {
-            Items.Add(item);
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return Equals(obj as Room);
-        }
-
-        public bool Equals(Room? other)
-        {
-            return base.Equals(other) &&
-            Type == other.Type &&
-            IsExplored == other.IsExplored;
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(base.GetHashCode(), Type, IsExplored);
-        }
-
-        public override string ToString()
-        {
-            return $"{Type} комната на ({X}, {Y}) - Исследована: {IsExplored}";
-        }
-    }
-
-    public class Item : GameObject, IEquatable<Item>
-    {
-        public int Value { get; private set; }
-        public ItemType Type { get; private set; }
-        public EquipmentType EquipmentType { get; set; }
-        public ConsoleColor Color { get; set; }
-
-        public Item(string name, int x, int y, int value, ItemType type,
-                   EquipmentType equipType = EquipmentType.Other,
-                   ConsoleColor color = ConsoleColor.White) : base(name, x, y)
-        {
-            Value = Math.Max(0, value);
-            Type = type;
-            EquipmentType = equipType;
-            Color = color;
-        }
-
-        public Item CreateCopy(int x, int y)
-        {
-            return new Item(this.Name, x, y, this.Value, this.Type, this.EquipmentType, this.Color);
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return Equals(obj as Item);
-        }
-
-        public bool Equals(Item? other)
-        {
-            return base.Equals(other) && Value == other.Value
-            && Type == other.Type;
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(base.GetHashCode(), Value, Type);
-        }
-
-        public override string ToString()
-        {
-            return $"{Name} ({Type}) - Ценность: {Value}";
-        }
-
-        public void DisplayWithColor()
-        {
-            var originalColor = Console.ForegroundColor;
-            Console.ForegroundColor = Color;
-            Console.Write($"{Name} ");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            Console.Write($"({Type}) - Ценность: {Value}");
-            Console.ForegroundColor = originalColor;
-        }
-    }
-
-    public class Dungeon : GameObject, IEquatable<Dungeon>
-    {
-        public int Width { get; private set; }
-        public int Height { get; private set; }
-        public List<Room> Rooms { get; private set; }
-        public int Depth { get; set; }
-
-        public Dungeon(string name, int width, int height, int depth = 1) : base(name, 0, 0)
-        {
-            Width = width;
-            Height = height;
-            Depth = depth;
-            Rooms = new List<Room>();
-        }
-
-        public void AddRoom(Room room)
-        {
-            Rooms.Add(room);
-        }
-
-        public Room? GetRoom(int x, int y)
-        {
-            return Rooms.FirstOrDefault(r => r.X == x && r.Y == y);
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return Equals(obj as Dungeon);
-        }
-
-        public bool Equals(Dungeon? other)
-        {
-            return base.Equals(other) && Width == other.Width
-            && Height == other.Height && Rooms.SequenceEqual(other.Rooms);
-        }
-
-        public override int GetHashCode()
-        {
-            var hash = new HashCode();
-            hash.Add(base.GetHashCode());
-            hash.Add(Width);
-            hash.Add(Height);
-            foreach (var room in Rooms.OrderBy(r => r.X).ThenBy(r => r.Y))
-            {
-                hash.Add(room);
-            }
-            return hash.ToHashCode();
-        }
-
-        public override string ToString()
-        {
-            return $"{Name} - Размер: {Width}x{Height}, Комнат: {Rooms.Count}, Глубина: {Depth}";
-        }
-
-        public void DisplayMiniMap(Player player, bool isExitActive = false)
-        {
-            Console.WriteLine($"\n=== Миникарта {Name} (Глубина: {Depth}) ===");
-
-            int startX = Math.Max(0, player.X - 3);
-            int endX = Math.Min(Width - 1, player.X + 3);
-            int startY = Math.Max(0, player.Y - 2);
-            int endY = Math.Min(Height - 1, player.Y + 2);
-
-            for (int y = startY; y <= endY; y++)
-            {
-                for (int x = startX; x <= endX; x++)
-                {
-                    var room = GetRoom(x, y);
-                    if (room != null)
-                    {
-                        if (player.X == x && player.Y == y)
-                        {
-                            ConsoleHelper.WriteColorInline("P ", ConsoleColor.Green); // Игрок
-                        }
-                        else
-                        {
-                            char symbol = GetRoomSymbol(room);
-                            ConsoleColor color = GetRoomColor(room, isExitActive);
-                            ConsoleHelper.WriteColorInline(symbol + " ", color);
-                        }
-                    }
-                    else
-                    {
-                        ConsoleHelper.WriteColorInline("# ", ConsoleColor.DarkGray); // Стена/неизвестная область
-                    }
-                }
-                Console.WriteLine();
-            }
-
-            Console.WriteLine("\nЛегенда:");
-            ConsoleHelper.WriteColorInline("P - Вы ", ConsoleColor.Green);
-            ConsoleHelper.WriteColorInline("S - Старт ", ConsoleColor.Blue);
-
-            if (isExitActive)
-            {
-                ConsoleHelper.WriteColorInline("E - Выход (активен) ", ConsoleColor.Yellow);
-            }
-            else
-            {
-                ConsoleHelper.WriteColorInline("E - Выход (заблокирован) ", ConsoleColor.DarkYellow);
-            }
-
-            ConsoleHelper.WriteColorInline("M - Враг ", ConsoleColor.Red);
-            ConsoleHelper.WriteColorInline("T - Сокровище ", ConsoleColor.Magenta);
-            ConsoleHelper.WriteColorInline("B - Босс ", ConsoleColor.DarkRed);
-            ConsoleHelper.WriteColorInline("$ - Торговец ", ConsoleColor.DarkYellow);
-            ConsoleHelper.WriteColorInline($"R - Отдых \n", ConsoleColor.DarkGreen);
-            ConsoleHelper.WriteColorInline("+ - Пустая ", ConsoleColor.Gray);
-            ConsoleHelper.WriteColorInline("# - Стена", ConsoleColor.DarkRed);
-            Console.WriteLine();
-        }
-
-        public char GetRoomSymbol(Room room)
-        {
-            return room.Type switch
-            {
-                RoomType.Start => 'S',
-                RoomType.Enemy => 'M',
-                RoomType.Treasure => 'T',
-                RoomType.Boss => 'B',
-                RoomType.Merchant => '$',
-                RoomType.Rest => 'R',
-                RoomType.Empty => '+',
-                _ => '?'
-            };
-        }
-
-        public ConsoleColor GetRoomColor(Room room, bool isExitActive = false)
-        {
-            return room.Type switch
-            {
-                RoomType.Start => ConsoleColor.Blue,
-                RoomType.Enemy => ConsoleColor.Red,
-                RoomType.Treasure => ConsoleColor.Magenta,
-                RoomType.Boss => ConsoleColor.DarkRed,
-                RoomType.Merchant => ConsoleColor.DarkYellow,
-                RoomType.Rest => ConsoleColor.DarkGreen,
-                RoomType.Empty => ConsoleColor.Gray,
-                _ => ConsoleColor.White
-            };
-        }
-    }
 
     public static class ConsoleHelper
     {
@@ -910,14 +391,14 @@ namespace TextRPG
             ConsoleHelper.WriteColor("\nВаш инвентарь для продажи:", ConsoleColor.Cyan);
 
             var itemsForSale = player.Inventory
-                .Where(item => item != player.EquippedWeapon && item != player.EquippedArmor)
+                .Where(kvp => kvp.Value != player.EquippedWeapon && kvp.Value != player.EquippedArmor)
                 .ToList();
 
             if (itemsForSale.Any())
             {
                 for (int i = 0; i < itemsForSale.Count; i++)
                 {
-                    var item = itemsForSale[i];
+                    var item = itemsForSale[i].Value;
                     int sellPrice = item.Value / 2;
                     Console.WriteLine($"{i + 5}. {item.Name} - {sellPrice} золота (продажа)");
                 }
@@ -955,24 +436,24 @@ namespace TextRPG
         private void SellItem(int itemIndex)
         {
             var itemsForSale = player.Inventory
-                .Where(item => item != player.EquippedWeapon && item != player.EquippedArmor)
+                .Where(kvp => kvp.Value != player.EquippedWeapon && kvp.Value != player.EquippedArmor)
                 .ToList();
 
             if (itemIndex < itemsForSale.Count && itemIndex >= 0)
             {
                 var itemToSell = itemsForSale[itemIndex];
 
-                if (itemToSell == player.EquippedWeapon || itemToSell == player.EquippedArmor)
+                if (itemToSell.Value == player.EquippedWeapon || itemToSell.Value == player.EquippedArmor)
                 {
                     ConsoleHelper.WriteColor("Нельзя продать экипированный предмет! Сначала снимите его.", ConsoleColor.Red);
                     return;
                 }
 
-                int sellPrice = itemToSell.Value / 2;
+                int sellPrice = itemToSell.Value.Value / 2;
 
-                player.Inventory.Remove(itemToSell);
+                player.Inventory.Remove(itemToSell.Key);
                 player.Gold += sellPrice;
-                ConsoleHelper.WriteColor($"Вы продали {itemToSell.Name} за {sellPrice} золота!", ConsoleColor.Yellow);
+                ConsoleHelper.WriteColor($"Вы продали {itemToSell.Value.Name} за {sellPrice} золота!", ConsoleColor.Yellow);
             }
             else
             {
@@ -1009,8 +490,15 @@ namespace TextRPG
                 else if (choice >= 5 && choice <= 9)
                 {
                     var itemsForSale = player.Inventory
-                    .Where(item => item != player.EquippedWeapon && item != player.EquippedArmor)
+                    .Where(kvp => kvp.Value != player.EquippedWeapon && kvp.Value != player.EquippedArmor)
                     .ToList();
+
+                    if (!itemsForSale.Any())
+                    {
+                        ConsoleHelper.WriteColor("Нет предметов для продажи!", ConsoleColor.Red);
+                        return true;
+                    }
+
                     int itemIndex = choice - 5;
                     if (itemIndex >= 0 && itemIndex < itemsForSale.Count)
                     {
@@ -1050,14 +538,16 @@ namespace TextRPG
             }
             else
             {
-                for (int i = 0; i < player.Inventory.Count; i++)
+                var inventoryList = player.Inventory.Values.ToList();
+
+                for (int i = 0; i < inventoryList.Count; i++)
                 {
                     string equippedMark = "";
-                    if (player.Inventory[i] == player.EquippedWeapon || player.Inventory[i] == player.EquippedArmor)
+                    if (inventoryList[i] == player.EquippedWeapon || inventoryList[i] == player.EquippedArmor)
                     {
                         equippedMark = " [Экипировано]";
                     }
-                    Console.WriteLine($"{i + 1}. {player.Inventory[i]}{equippedMark}");
+                    Console.WriteLine($"{i + 1}. {inventoryList[i]}{equippedMark}");
                 }
 
                 Console.WriteLine("\nВыберите действие:");
@@ -1104,16 +594,24 @@ namespace TextRPG
                 }
                 else if (int.TryParse(input, out int choice))
                 {
-                    if (choice > 0 && choice <= player.Inventory.Count)
+                    if (choice > 0 && choice <= inventoryList.Count)
                     {
-                        var selectedItem = player.Inventory[choice - 1];
+                        var selectedItem = inventoryList[choice - 1];
+
+                        var itemKey = player.GetItemKey(selectedItem);
+
+                        if (string.IsNullOrEmpty(itemKey))
+                        {
+                            Console.WriteLine("Ошибка: не удалось найти ключ предмета!");
+                            return;
+                        }
 
                         switch (selectedItem.Type)
                         {
                             case ItemType.Potion:
                                 int healValue = selectedItem.Value;
                                 player.Heal(healValue);
-                                player.Inventory.Remove(selectedItem);
+                                player.Inventory.Remove(itemKey);
                                 Console.WriteLine($"Вы использовали {selectedItem.Name}!");
                                 break;
 
@@ -1121,7 +619,7 @@ namespace TextRPG
                             case ItemType.Treasure:
                                 if (selectedItem.EquipmentType == EquipmentType.Weapon ||
                                     selectedItem.EquipmentType == EquipmentType.Armor)
-                                    player.EquipItem(selectedItem);
+                                    player.EquipItem(itemKey);
                                 else
                                     Console.WriteLine("Этот предмет нельзя экипировать.");
                                 break;
@@ -1208,13 +706,17 @@ namespace TextRPG
                         Console.WriteLine($"Вы нанесли {player.Attack} урона!");
                         break;
                     case "2":
-                        var potion = player.Inventory.FirstOrDefault(i => i.Type == ItemType.Potion);
-                        if (potion != null)
-                        {
-                            player.Heal(potion.Value);
-                            player.Inventory.Remove(potion);
-                            Console.WriteLine($"Вы восстановили {potion.Value} здоровья!");
+                        var potions = player.Inventory.Values
+                            .Where(item => item.Type == ItemType.Potion)
+                            .ToList();
 
+                        if (potions.Any())
+                        {
+                            var potion = potions.First();
+                            var potionKey = player.Inventory.FirstOrDefault(kvp => kvp.Value == potion).Key;
+                            player.Heal(potion.Value);
+                            player.Inventory.Remove(potionKey);
+                            Console.WriteLine($"Вы восстановили {potion.Value} здоровья!");
                             damageTaken = 0;
                         }
                         else
@@ -1569,7 +1071,9 @@ namespace TextRPG
 
         private bool UseItemInCombat()
         {
-            var potions = player.Inventory.Where(i => i.Type == ItemType.Potion).ToList();
+            var potions = player.Inventory.Values
+                .Where(item => item.Type == ItemType.Potion)
+                .ToList();
 
             if (!potions.Any())
             {
@@ -1587,23 +1091,15 @@ namespace TextRPG
             var input = Console.ReadLine();
             if (int.TryParse(input, out int choice) && choice > 0 && choice <= potions.Count)
             {
-                if (choice == 0) return false;
-                if (choice > 0 && choice <= potions.Count)
+                var selectedPotion = potions[choice - 1];
+                var potionKey = player.Inventory.FirstOrDefault(kvp => kvp.Value == selectedPotion).Key;
+
+                if (!string.IsNullOrEmpty(potionKey))
                 {
-                    var selectedPotion = potions[choice - 1];
-
-                    var potionInventory = player.Inventory.FirstOrDefault(i =>
-                        i.Name == selectedPotion.Name &&
-                        i.Value == selectedPotion.Value &&
-                        i.Type == selectedPotion.Type);
-
-                    if (potionInventory != null)
-                    {
-                        player.Heal(potionInventory.Value);
-                        player.Inventory.Remove(potionInventory);
-                        ConsoleHelper.WriteColor($"Вы использовали {potionInventory.Name}!", ConsoleColor.Green);
-                        return true;
-                    }
+                    player.Heal(selectedPotion.Value);
+                    player.Inventory.Remove(potionKey);
+                    ConsoleHelper.WriteColor($"Вы использовали {selectedPotion.Name}!", ConsoleColor.Green);
+                    return true;
                 }
             }
 
