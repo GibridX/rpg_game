@@ -1,6 +1,7 @@
 using TextRPG.Core.Models;
 using TextRPG.Core.Enums;
 using TextRPG.Config;
+using TextRPG.Core.Utils;
 
 namespace TextRPG
 {
@@ -19,9 +20,11 @@ namespace TextRPG
         public Dictionary<string, Item> Inventory { get; private set; }
         public Item? EquippedWeapon { get; private set; }
         public Item? EquippedArmor { get; private set; }
+        private GameConfig _config;
 
         public Player(string name, int x, int y) : base(name, x, y)
         {
+            _config = new GameConfig();
             BaseMaxHealth = 100;
             MaxHealth = BaseMaxHealth;
             Health = MaxHealth;
@@ -168,7 +171,7 @@ namespace TextRPG
 
         public void LevelUp()
         {
-            if (Level >= GameConfig.MaxPlayerLevel)
+            if (Level >= _config.MaxPlayerLevel)
             {
                 ConsoleHelper.WriteColor("Вы достигли максимального уровня!", ConsoleColor.Yellow);
                 return;
@@ -202,7 +205,7 @@ namespace TextRPG
         {
             int actualDamage = damage;
 
-            if (random.Next(100) < (Level * GameConfig.DodgePerLevel))
+            if (random.Next(100) < (Level * _config.DodgePerLevel))
             {
                 actualDamage = damage / 2;
                 ConsoleHelper.WriteColor(" Уклонение! Урон уменьшен вдвое.", ConsoleColor.Cyan);
@@ -236,7 +239,7 @@ namespace TextRPG
 
         public void AddItem(Item item)
         {
-            if (Inventory.Count >= GameConfig.MaxInventorySize)
+            if (Inventory.Count >= _config.MaxInventorySize)
             {
                 ConsoleHelper.WriteColor("Инвентарь полон! Вы не можете поднять этот предмет.", ConsoleColor.Red);
                 return;

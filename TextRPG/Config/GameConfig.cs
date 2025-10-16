@@ -1,42 +1,42 @@
 namespace TextRPG.Config
 {
-    public static class GameConfig
+    public class GameConfig
     {
         // Игрок
-        public static int BasePlayerHealth = 100;
-        public static int BasePlayerAttack = 10;
-        public static int PlayerDamageVariance = 3;
-        public static int ExpForNextLevelMultiplier = 2;
-        public static int RestRoomCooldown = 5;
-        public static int MaxInventorySize = 20;
-        public static int MaxPlayerLevel = 25;
+        public int BasePlayerHealth { get; set; } = 100;
+        public int BasePlayerAttack { get; set; } = 10;
+        public int PlayerDamageVariance { get; set; } = 3;
+        public int ExpForNextLevelMultiplier { get; set; } = 2;
+        public int RestRoomCooldown { get; set; } = 5;
+        public int MaxInventorySize { get; set; } = 20;
+        public int MaxPlayerLevel { get; set; } = 25;
 
         // Враг
-        public static int MinEnemyHealth = 30;
-        public static int MaxEnemyHealth = 200;
-        public static int EnemyHealthPerLevel = 6;
-        public static int EnemyAttackPerLevel = 2;
-        public static int BaseEnemyAttack = 8;
-        public static int BaseEnemyGold = 10;
-        public static int EnemyGoldPerLevel = 4;
+        public int MinEnemyHealth { get; set; } = 30;
+        public int MaxEnemyHealth { get; set; } = 200;
+        public int EnemyHealthPerLevel { get; set; } = 6;
+        public int EnemyAttackPerLevel { get; set; } = 2;
+        public int BaseEnemyAttack { get; set; } = 8;
+        public int BaseEnemyGold { get; set; } = 10;
+        public int EnemyGoldPerLevel { get; set; } = 4;
 
         // Игровые механики
-        public static int EscapeChance = 50;
-        public static int DodgePerLevel = 2;
+        public int EscapeChance { get; set; } = 50;
+        public int DodgePerLevel { get; set; } = 2;
 
         // Генерация комнат
-        public static int BaseEmptyRoomChance = 25;
-        public static int BaseEnemyRoomChance = 20;
-        public static int BaseTreasureRoomChance = 10;
-        public static int BaseMerchantRoomChance = 5;
-        public static int BaseRestRoomChance = 5;
+        public int BaseEmptyRoomChance { get; set; } = 25;
+        public int BaseEnemyRoomChance { get; set; } = 20;
+        public int BaseTreasureRoomChance { get; set; } = 10;
+        public int BaseMerchantRoomChance { get; set; } = 5;
+        public int BaseRestRoomChance { get; set; } = 5;
 
-        public static int MaxDugeonGenerationAttempts = 10;
-        public static int EnemyChance = 20;
-        public static int TreasureChance = 10;
+        public int MaxDugeonGenerationAttempts { get; set; } = 10;
+        public int EnemyChance { get; set; } = 20;
+        public int TreasureChance { get; set; } = 10;
 
         // Босс
-        public static int BossHealthMuliplier = 10;
-        public static int BossAttackMultiplier = 3;
+        public int BossHealthMuliplier { get; set; } = 10;
+        public int BossAttackMultiplier { get; set; } = 3;
     }
 }
