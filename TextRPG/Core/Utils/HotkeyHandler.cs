@@ -1,11 +1,13 @@
-public static class SimpleHotkeyHandler
+namespace TextRPG.Core.Utils
+{
+    public static class HotkeyHandler
     {
         public static bool CheckForHotkeys()
         {
             if (Console.KeyAvailable)
             {
                 var key = Console.ReadKey(true);
-                
+
                 if ((key.Modifiers & ConsoleModifiers.Control) != 0)
                 {
                     switch (key.Key)
@@ -27,3 +29,4 @@ public static class SimpleHotkeyHandler
             Console.ReadKey(true);
         }
     }
+}

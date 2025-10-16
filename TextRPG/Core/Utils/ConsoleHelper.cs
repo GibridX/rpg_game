@@ -1,4 +1,6 @@
-public static class ConsoleHelper
+namespace TextRPG.Core.Utils
+{
+    public static class ConsoleHelper
     {
         public static void WriteColor(string text, ConsoleColor color)
         {
@@ -16,3 +18,4 @@ public static class ConsoleHelper
             Console.ForegroundColor = originalColor;
         }
     }
+}
