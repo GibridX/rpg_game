@@ -5,9 +5,9 @@ namespace TextRPG
 {
     public class Item : GameObject, IEquatable<Item>
     {
-        public int Value { get; private set; }
-        public ItemType Type { get; private set; }
+        public ItemType Type { get; private set; } 
         public EquipmentType EquipmentType { get; set; }
+        public int Value { get; private set; }
         public ConsoleColor Color { get; set; }
 
         public Item(string name, int x, int y, int value, ItemType type,
@@ -19,6 +19,7 @@ namespace TextRPG
             EquipmentType = equipType;
             Color = color;
         }
+
 
         public Item CreateCopy(int x, int y)
         {

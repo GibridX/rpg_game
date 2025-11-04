@@ -41,9 +41,7 @@ namespace TextRPG.Core.Services.Game
         {
             ConsoleHelper.WriteColor("\nВаш инвентарь для продажи:", ConsoleColor.Cyan);
 
-            var itemsForSale = player.Inventory
-                .Where(kvp => kvp.Value != player.EquippedWeapon && kvp.Value != player.EquippedArmor)
-                .ToList();
+            var itemsForSale = player.Inventory.GetItemsForSale();
 
             if (itemsForSale.Any())
             {
@@ -69,22 +67,24 @@ namespace TextRPG.Core.Services.Game
                 if (choice >= 1 && choice <= merchantItems.Count)
                 {
                     BuyItem(player, merchantItems[choice - 1]);
+                    return true;
                 }
                 else if (choice >= 5 && choice <= 9)
                 {
                     SellItem(player, choice - 5);
+                    return true;
                 }
                 else
                 {
                     ConsoleHelper.WriteColor("Неверный выбор!", ConsoleColor.Red);
+                    return true;
                 }
             }
             else
             {
                 ConsoleHelper.WriteColor("Неверный ввод!", ConsoleColor.Red);
+                return true;
             }
-
-            return true;
         }
 
         private void BuyItem(Player player, Item itemToBuy)
@@ -113,23 +113,15 @@ namespace TextRPG.Core.Services.Game
 
         private void SellItem(Player player, int itemIndex)
         {
-            var itemsForSale = player.Inventory
-                .Where(kvp => kvp.Value != player.EquippedWeapon && kvp.Value != player.EquippedArmor)
-                .ToList();
+            var itemsForSale = player.Inventory.GetItemsForSale();
 
             if (itemIndex < itemsForSale.Count && itemIndex >= 0)
             {
                 var itemToSell = itemsForSale[itemIndex];
 
-                if (itemToSell.Value == player.EquippedWeapon || itemToSell.Value == player.EquippedArmor)
-                {
-                    ConsoleHelper.WriteColor("Нельзя продать экипированный предмет! Сначала снимите его.", ConsoleColor.Red);
-                    return;
-                }
-
                 int sellPrice = itemToSell.Value.Value / 2;
 
-                player.Inventory.Remove(itemToSell.Key);
+                player.Inventory.RemoveItem(itemToSell.Key);
                 player.Gold += sellPrice;
                 ConsoleHelper.WriteColor($"Вы продали {itemToSell.Value.Name} за {sellPrice} золота!", ConsoleColor.Yellow);
             }

@@ -58,7 +58,7 @@ namespace TextRPG.Core.Factory
 
         private int CalculateBossLevel(int playerLevel, int depth)
         {
-            return Math.Max(playerLevel + 2, depth * 3);
+            return Math.Max(playerLevel, depth + 1);
         }
     }
 }

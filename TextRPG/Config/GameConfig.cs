@@ -9,7 +9,7 @@ namespace TextRPG.Config
         public int ExpForNextLevelMultiplier { get; set; } = 2;
         public int RestRoomCooldown { get; set; } = 5;
         public int MaxInventorySize { get; set; } = 20;
-        public int MaxPlayerLevel { get; set; } = 25;
+        public int MaxPlayerLevel { get; set; } = 10;
 
         // Враг
         public int MinEnemyHealth { get; set; } = 30;

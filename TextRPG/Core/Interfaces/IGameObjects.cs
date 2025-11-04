@@ -15,12 +15,4 @@ namespace TextRPG.Core.Interfaces
         void TakeDamage(int damage);
         void Heal(int amount);
     }
-
-    public interface IInventory
-    {
-        List<Item> Inventory { get; }
-        int Gold { get; set; }
-        void AddItem(Item item);
-        bool RemoveItem(Item item);
-    }
 }
