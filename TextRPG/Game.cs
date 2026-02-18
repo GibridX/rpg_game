@@ -32,6 +32,8 @@ namespace TextRPG
         private int currentDepth = 1;
         private bool bossDefeated = false;
 
+        private string lastMovementMessage = "";
+
         public Game()
         {
             player = new Player("Герой", 0, 0);
@@ -126,6 +128,19 @@ namespace TextRPG
                     _gameStateService.DisplayCompactStatusBar(player, currentDepth, currentDungeon);
                     currentDungeon.DisplayMiniMap(player, bossDefeated);
 
+                    if (!string.IsNullOrEmpty(lastMovementMessage))
+                    {
+                        if (lastMovementMessage.Contains("стена") || lastMovementMessage.Contains("границ"))
+                            ConsoleHelper.WriteColor(lastMovementMessage, ConsoleColor.Red);
+                        else if (lastMovementMessage.Contains("обнаружили"))
+                            ConsoleHelper.WriteColor(lastMovementMessage, ConsoleColor.Green);
+                        else
+                            ConsoleHelper.WriteColor(lastMovementMessage, ConsoleColor.Yellow);
+
+                        lastMovementMessage = "";
+                        Console.WriteLine();
+                    }
+
                     if (!ProcessPlayerInput())
                         break;
 
@@ -157,6 +172,12 @@ namespace TextRPG
             var key = Console.ReadKey(true);
             Console.WriteLine();
 
+            if (IsMovementKey(key.Key))
+            {
+                HandleMovement(key.Key);
+                return true;
+            }
+
             switch (key.Key)
             {
                 case ConsoleKey.I:
@@ -179,10 +200,6 @@ namespace TextRPG
                     _gameUIService.ShowContinuePrompt();
                     Console.ReadKey(true);
                     MarkForClear();
-                    break;
-                case ConsoleKey.M:
-                    _gameUIService.ShowActionFeedback("movement");
-                    MovePlayer();
                     break;
                 case ConsoleKey.Escape:
                     _gameUIService.ShowActionFeedback("exit");
@@ -221,6 +238,31 @@ namespace TextRPG
             return true;
         }
 
+        private bool IsMovementKey(ConsoleKey key)
+        {
+            return key == ConsoleKey.W || key == ConsoleKey.A ||
+                key == ConsoleKey.S || key == ConsoleKey.D;
+        }
+
+        private void HandleMovement(ConsoleKey key)
+        {
+            string direction = key.ToString().ToLower();
+
+            if (_playerMovementService.TryMovePlayer(player, currentDungeon, direction, out string message))
+            {
+                lastMovementMessage = message;
+                ProcessCurrentRoom();
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(message))
+                {
+                    lastMovementMessage = message;
+                }
+            }
+        }
+
+        // Неиспользуется, оставлен для обратной совместимости
         private void MovePlayer()
         {
             _gameUIService.ShowMovementMenu();

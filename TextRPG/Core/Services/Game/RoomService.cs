@@ -141,10 +141,27 @@ namespace TextRPG.Core.Services.Game
                 }
 
                 room.Type = RoomType.Exit;
-                _gameScreenService.ShowVictoryScreen(player);
-                ConsoleHelper.WriteColor("Портал выхода активирован! Теперь вы можете покинуть подземелье.", ConsoleColor.Yellow);
-                Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
-                Console.ReadKey(true);
+                bool playerChoice = _gameScreenService.ShowVictoryScreen(player, true);
+
+                if (playerChoice)
+                {
+                    ConsoleHelper.WriteColor("Вы входите в портал, ведущий глубже в подземелье...", ConsoleColor.Cyan);
+                    Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                    Console.ReadKey(true);
+
+                    onDepthIncrease?.Invoke(1);
+
+                    return;
+                }
+                else
+                {
+                    ConsoleHelper.WriteColor("Вы решили продолжить исследование текущего уровня.", ConsoleColor.Yellow);
+                    ConsoleHelper.WriteColor("Портал выхода остаётся активным на случай, если вы передумаете.", ConsoleColor.Yellow);
+                    Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                    Console.ReadKey(true);
+
+                    return;
+                }
             }
             else
             {
@@ -208,12 +225,6 @@ namespace TextRPG.Core.Services.Game
 
                 {
                     trading = _merchantService.ProcessMerchantInput(input, player, merchantItems);
-
-                    if (trading)
-                    {
-                        Console.WriteLine("\nНажмите любую клавишу чтобы продолжить...");
-                        Console.ReadKey(true);
-                    }
                 }
             }
 
@@ -259,13 +270,21 @@ namespace TextRPG.Core.Services.Game
 
         private void HandleExit(Player player, Action<int> onDepthIncrease)
         {
-            if (_gameScreenService.ShowVictoryScreen(player))
+            bool shouldGoDeeper = _gameScreenService.ShowVictoryScreen(player, false);
+
+            if (shouldGoDeeper)
             {
+                ConsoleHelper.WriteColor("Вы решаете спуститься глубже в подземелье...", ConsoleColor.Cyan);
+                Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                Console.ReadKey(true);
+
                 onDepthIncrease?.Invoke(1);
             }
             else
             {
-                ConsoleHelper.WriteColor("Спасибо за игру! До новых встреч!", ConsoleColor.Green);
+                ConsoleHelper.WriteColor("Вы возвращаетесь к исследованию текущего уровня.", ConsoleColor.Yellow);
+                Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                Console.ReadKey(true);
             }
         }
 
