@@ -8,6 +8,7 @@ using TextRPG.Core.Enums;
 using TextRPG.Core.Services.Game;
 using TextRPG.Core.Services.UI;
 using TextRPG.Core.Services.Generation;
+using TextRPG.Core.Models.Inventory.Equipment;
 
 namespace TextRPG
 {
@@ -26,12 +27,17 @@ namespace TextRPG
         private RoomService _roomService;
         private PlayerMovementService _playerMovementService;
         private GameScreenService _gameScreenService;
+        private EquipmentService _equipmentService;
         private bool needsClear = true;
         private int currentDepth = 1;
         private bool bossDefeated = false;
 
+        private string lastMovementMessage = "";
+
         public Game()
         {
+            player = new Player("Герой", 0, 0);
+            _equipmentService = new EquipmentService(player);
             _config = new GameConfig();
             _levelGenerator = new LevelGenerator(12, 12);
             random = new Random();
@@ -39,11 +45,11 @@ namespace TextRPG
             _enemyFactory = new EnemyFactory();
             _gameStateService = new GameStateService(_config);
             _merchantService = new MerchantService(_config);
-            _gameUIService = new GameUIService();
+            _gameUIService = new GameUIService(_equipmentService);
             _playerMovementService = new PlayerMovementService();
             _gameScreenService = new GameScreenService();
 
-            _roomService = new RoomService(_config, _enemyFactory, _combatService, _merchantService);
+            _roomService = new RoomService(_config, _enemyFactory, _combatService, _merchantService, _gameScreenService);
             InitializeGame();
         }
 
@@ -56,7 +62,6 @@ namespace TextRPG
         {
             if (isNewGame)
             {
-                player = new Player("Герой", 0, 0);
                 currentDepth = 1;
                 bossDefeated = false;
             }
@@ -123,6 +128,19 @@ namespace TextRPG
                     _gameStateService.DisplayCompactStatusBar(player, currentDepth, currentDungeon);
                     currentDungeon.DisplayMiniMap(player, bossDefeated);
 
+                    if (!string.IsNullOrEmpty(lastMovementMessage))
+                    {
+                        if (lastMovementMessage.Contains("стена") || lastMovementMessage.Contains("границ"))
+                            ConsoleHelper.WriteColor(lastMovementMessage, ConsoleColor.Red);
+                        else if (lastMovementMessage.Contains("обнаружили"))
+                            ConsoleHelper.WriteColor(lastMovementMessage, ConsoleColor.Green);
+                        else
+                            ConsoleHelper.WriteColor(lastMovementMessage, ConsoleColor.Yellow);
+
+                        lastMovementMessage = "";
+                        Console.WriteLine();
+                    }
+
                     if (!ProcessPlayerInput())
                         break;
 
@@ -149,66 +167,143 @@ namespace TextRPG
 
         private bool ProcessPlayerInput()
         {
-            if (HotkeyHandler.CheckForHotkeys())
+            _gameUIService.ShowMainMenu();
+
+            var key = Console.ReadKey(true);
+            Console.WriteLine();
+
+            if (IsMovementKey(key.Key))
             {
-                MarkForClear();
+                HandleMovement(key.Key);
                 return true;
             }
 
-            _gameUIService.ShowMainMenu();
-            var input = Console.ReadLine();
-
-            switch (input)
+            switch (key.Key)
             {
-                case "1":
-                    MovePlayer();
-                    break;
-                case "2":
-                    _gameUIService.ShowInventory(player);
+                case ConsoleKey.I:
+                    _gameUIService.ShowActionFeedback("inventory");
+                    _gameUIService.ShowInventoryManagement(player);
                     MarkForClear();
                     break;
-                case "3":
+                case ConsoleKey.H:
+                    _gameUIService.ShowActionFeedback("potion");
+                    _gameUIService.ShowQuickPotionMenu(player);
+                    break;
+                case ConsoleKey.C:
+                    _gameUIService.ShowActionFeedback("character");
                     _gameUIService.ShowCharacterInfo(player, currentDepth);
                     MarkForClear();
                     break;
-                case "4":
-                    return false;
-                default:
-                    ConsoleHelper.WriteColor("Неверный выбор! Нажмите любую клавишу...", ConsoleColor.Red);
+                case ConsoleKey.E:
+                    _gameUIService.ShowActionFeedback("equipment");
+                    _gameUIService.ShowEquipmentStats(player);
+                    _gameUIService.ShowContinuePrompt();
                     Console.ReadKey(true);
                     MarkForClear();
+                    break;
+                case ConsoleKey.Escape:
+                    _gameUIService.ShowActionFeedback("exit");
+                    return false;
+                default:
+                    if ((key.Modifiers & ConsoleModifiers.Control) != 0)
+                    {
+                        switch (key.Key)
+                        {
+                            case ConsoleKey.D:
+                                _gameUIService.ShowActionFeedback("debug");
+                                _gameUIService.ShowWarningMessage("[Ctrl+D] Функция в разработке");
+                                _gameUIService.ShowContinuePrompt();
+                                Console.ReadKey(true);
+                                MarkForClear();
+                                break;
+                            default:
+                                _gameUIService.ShowErrorMessage("Неизвестная комбинация клавиш!");
+                                _gameUIService.ShowContinuePrompt();
+                                Console.ReadKey(true);
+                                MarkForClear();
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        _gameUIService.ShowErrorMessage("Неизвестная команда!");
+                        _gameUIService.ShowWarningMessage("Используйте клавиши I, H, C, E, M или ESC");
+                        _gameUIService.ShowContinuePrompt();
+                        Console.ReadKey(true);
+                        MarkForClear();
+                    }
                     break;
             }
 
             return true;
         }
-    
-        private void MovePlayer()
+
+        private bool IsMovementKey(ConsoleKey key)
         {
-            ConsoleHelper.WriteColor("\n Куда двигаемся?", ConsoleColor.Cyan);
-            ConsoleHelper.WriteColor("W - вверх, S - вниз, A - влево, D - вправо, 0 - отмена", ConsoleColor.White);
+            return key == ConsoleKey.W || key == ConsoleKey.A ||
+                key == ConsoleKey.S || key == ConsoleKey.D;
+        }
 
-            var direction = Console.ReadLine();
-
-            if (string.IsNullOrEmpty(direction))
-            {
-                ConsoleHelper.WriteColor("Неверное направление!", ConsoleColor.Red);
-                return;
-            }
+        private void HandleMovement(ConsoleKey key)
+        {
+            string direction = key.ToString().ToLower();
 
             if (_playerMovementService.TryMovePlayer(player, currentDungeon, direction, out string message))
             {
-                ConsoleHelper.WriteColor(message, 
-                    message.Contains("обнаружили") ? ConsoleColor.Green : ConsoleColor.Gray);
+                lastMovementMessage = message;
                 ProcessCurrentRoom();
             }
             else
             {
                 if (!string.IsNullOrEmpty(message))
                 {
-                    ConsoleHelper.WriteColor(message, ConsoleColor.Red);
+                    lastMovementMessage = message;
                 }
-                Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+            }
+        }
+
+        // Неиспользуется, оставлен для обратной совместимости
+        private void MovePlayer()
+        {
+            _gameUIService.ShowMovementMenu();
+
+            var direction = Console.ReadLine()?.ToLower();
+
+            if (string.IsNullOrEmpty(direction))
+            {
+                _gameUIService.ShowErrorMessage("Неверное направление!");
+                _gameUIService.ShowContinuePrompt();
+                Console.ReadKey(true);
+                return;
+            }
+
+            // Обработка быстрого использования зелья
+            if (direction == "h")
+            {
+                _gameUIService.ShowActionFeedback("potion");
+                _gameUIService.ShowQuickPotionMenu(player);
+                MarkForClear();
+                return;
+            }
+
+            if (direction == "escape" || direction == "esc")
+            {
+                _gameUIService.ShowInfoMessage("Возврат в главное меню...");
+                return;
+            }
+
+            if (_playerMovementService.TryMovePlayer(player, currentDungeon, direction, out string message))
+            {
+                _gameUIService.ShowSuccessMessage(message);
+                ProcessCurrentRoom();
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(message))
+                {
+                    _gameUIService.ShowErrorMessage(message);
+                }
+                _gameUIService.ShowContinuePrompt();
                 Console.ReadKey(true);
             }
         }
@@ -235,14 +330,11 @@ namespace TextRPG
         private void ShowGameOverScreen()
         {
             _gameScreenService.ShowGameOverScreen(player, currentDepth);
-            Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
-            Console.ReadKey(true);
-        }
 
-        private bool ShowVictoryScreen()
-        {
-            _gameScreenService.ShowVictoryScreen(player, currentDepth);
-            return _gameScreenService.GetVictoryChoice();
+            _gameUIService.ShowInventorySummary(player);
+
+            _gameUIService.ShowContinuePrompt();
+            Console.ReadKey(true);
         }
     }
 }

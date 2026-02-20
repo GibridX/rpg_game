@@ -42,7 +42,6 @@ namespace TextRPG.Core.Services.Game
             // Успешное перемещение
             player.X = newX;
             player.Y = newY;
-            player.IncrementTurnCounter();
 
             if (!newRoom.IsExplored)
             {

@@ -4,24 +4,28 @@ using TextRPG.Config;
 using TextRPG.Core.Enums;
 using TextRPG.Core.Factory;
 using TextRPG.Core.Models;
+using TextRPG.Core.Services.Generation;
+using TextRPG.Core.Services.UI;
 using TextRPG.Core.Utils;
 
 namespace TextRPG.Core.Services.Game
 {
-    public class RoomService
+    public class RoomService : IRoomService
     {
         private readonly GameConfig _config;
         private readonly IEnemyFactory _enemyFactory;
         private readonly ICombatService _combatService;
         private readonly MerchantService _merchantService;
+        private readonly GameScreenService _gameScreenService;
         private readonly Random _random;
 
-        public RoomService(GameConfig config, IEnemyFactory enemyFactory, ICombatService combatService, MerchantService merchantService)
+        public RoomService(GameConfig config, IEnemyFactory enemyFactory, ICombatService combatService, MerchantService merchantService, GameScreenService gameScreenService)
         {
             _config = config;
             _enemyFactory = enemyFactory;
             _combatService = combatService;
             _merchantService = merchantService;
+            _gameScreenService = gameScreenService;
             _random = new Random();
         }
 
@@ -31,6 +35,8 @@ namespace TextRPG.Core.Services.Game
             {
                 player.IncrementTurnCounter();
             }
+
+            DisplayRoomHeader(room);
 
             switch (room.Type)
             {
@@ -55,9 +61,40 @@ namespace TextRPG.Core.Services.Game
             }
         }
 
+        private void DisplayRoomHeader(Room room)
+        {
+            var color = room.Type switch
+            {
+                RoomType.Enemy => ConsoleColor.Red,
+                RoomType.Boss => ConsoleColor.DarkRed,
+                RoomType.Treasure => ConsoleColor.Yellow,
+                RoomType.Merchant => ConsoleColor.DarkYellow,
+                RoomType.Rest => ConsoleColor.Green,
+                RoomType.Exit => ConsoleColor.Blue,
+                _ => ConsoleColor.Gray
+            };
+
+            ConsoleHelper.WriteColor($"\n{GetRoomDescription(room)}", color);
+        }
+
+        private string GetRoomDescription(Room room)
+        {
+            return room.Type switch
+            {
+                RoomType.Enemy => "Комната с противником",
+                RoomType.Boss => "Логово Босса",
+                RoomType.Treasure => "Сокровищница",
+                RoomType.Merchant => "Лагерь торговца",
+                RoomType.Rest => "Комната отдыха",
+                RoomType.Exit => "Выход из подземелья",
+                RoomType.Empty => "Пустая комната",
+                _ => "Неизвестная комната"
+            };
+        }
+
         private void Combat(Player player, Room room)
         {
-            var enemy = _enemyFactory.CreateRegularEnemy(player.X, player.Y, player.Level, 1); // depth можно передавать как параметр
+            var enemy = _enemyFactory.CreateRegularEnemy(player.X, player.Y, player.Level, 1);
 
             var combatResult = _combatService.StartCombat(player, enemy);
 
@@ -89,7 +126,7 @@ namespace TextRPG.Core.Services.Game
 
         private void BossFight(Player player, Room room, ref bool bossDefeated, Action<int> onDepthIncrease)
         {
-            var boss = _enemyFactory.CreateBoss(player.X, player.Y, player.Level, 1); // depth можно передавать как параметр
+            var boss = _enemyFactory.CreateBoss(player.X, player.Y, player.Level, 1);
 
             var combatResult = _combatService.StartBossFight(player, boss);
 
@@ -104,9 +141,27 @@ namespace TextRPG.Core.Services.Game
                 }
 
                 room.Type = RoomType.Exit;
-                ConsoleHelper.WriteColor("Портал выхода активирован! Теперь вы можете покинуть подземелье.", ConsoleColor.Yellow);
-                Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
-                Console.ReadKey(true);
+                bool playerChoice = _gameScreenService.ShowVictoryScreen(player, true);
+
+                if (playerChoice)
+                {
+                    ConsoleHelper.WriteColor("Вы входите в портал, ведущий глубже в подземелье...", ConsoleColor.Cyan);
+                    Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                    Console.ReadKey(true);
+
+                    onDepthIncrease?.Invoke(1);
+
+                    return;
+                }
+                else
+                {
+                    ConsoleHelper.WriteColor("Вы решили продолжить исследование текущего уровня.", ConsoleColor.Yellow);
+                    ConsoleHelper.WriteColor("Портал выхода остаётся активным на случай, если вы передумаете.", ConsoleColor.Yellow);
+                    Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                    Console.ReadKey(true);
+
+                    return;
+                }
             }
             else
             {
@@ -140,17 +195,6 @@ namespace TextRPG.Core.Services.Game
                 player.AddItem(inventoryItem);
                 room.Items.Remove(item);
                 Console.WriteLine($"Вы нашли {item.Name}!");
-
-                if (item.Type == ItemType.Potion)
-                {
-                    player.Heal(item.Value);
-                    Console.WriteLine($"Зелье восстановило {item.Value} здоровья!");
-                }
-                else if (item.Type == ItemType.Weapon)
-                {
-                    player.Attack += item.Value / 5;
-                    Console.WriteLine($"Оружие увеличило вашу атаку!");
-                }
             }
         }
 
@@ -173,12 +217,14 @@ namespace TextRPG.Core.Services.Game
                     continue;
                 }
 
-                trading = _merchantService.ProcessMerchantInput(input, player, merchantItems);
-
-                if (trading)
+                if (input == "0")
                 {
-                    Console.WriteLine("\nНажмите любую клавишу чтобы продолжить...");
-                    Console.ReadKey(true);
+                    trading = false;
+                }
+                else
+
+                {
+                    trading = _merchantService.ProcessMerchantInput(input, player, merchantItems);
                 }
             }
 
@@ -224,47 +270,23 @@ namespace TextRPG.Core.Services.Game
 
         private void HandleExit(Player player, Action<int> onDepthIncrease)
         {
-            if (ShowVictoryScreen(player))
+            bool shouldGoDeeper = _gameScreenService.ShowVictoryScreen(player, false);
+
+            if (shouldGoDeeper)
             {
-                onDepthIncrease?.Invoke(1); // Увеличиваем глубину на 1
+                ConsoleHelper.WriteColor("Вы решаете спуститься глубже в подземелье...", ConsoleColor.Cyan);
+                Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                Console.ReadKey(true);
+
+                onDepthIncrease?.Invoke(1);
             }
             else
             {
-                ConsoleHelper.WriteColor("Спасибо за игру! До новых встреч!", ConsoleColor.Green);
+                ConsoleHelper.WriteColor("Вы возвращаетесь к исследованию текущего уровня.", ConsoleColor.Yellow);
+                Console.WriteLine("Нажмите любую клавишу чтобы продолжить...");
+                Console.ReadKey(true);
             }
         }
 
-        private bool ShowVictoryScreen(Player player)
-        {
-            Console.Clear();
-            ConsoleHelper.WriteColor(@"
-        ╔══════════════════════════════════════════╗
-        ║                ПОБЕДА!                  ║
-        ║                                          ║
-        ║   Вы нашли выход из подземелья!         ║
-        ║   Ваши достижения:                       ║
-        ║                                          ║", ConsoleColor.Yellow);
-
-            ConsoleHelper.WriteColorInline($"   Уровень персонажа: {player.Level} ", ConsoleColor.Cyan);
-            ConsoleHelper.WriteColorInline($"Золото: {player.Gold} ", ConsoleColor.Yellow);
-            // Глубина будет отображаться в вызывающем коде
-            Console.WriteLine();
-
-            ConsoleHelper.WriteColorInline($"   Здоровье: {player.Health}/{player.MaxHealth} ", ConsoleColor.Red);
-            ConsoleHelper.WriteColorInline($"Атака: {player.Attack} ", ConsoleColor.Yellow);
-            ConsoleHelper.WriteColorInline($"Опыт: {player.Experience}/{player.ExperienceToNextLevel}", ConsoleColor.Blue);
-            Console.WriteLine();
-
-            ConsoleHelper.WriteColor(@"
-        ║                                          ║
-        ║   Хотите спуститься глубже?             ║
-        ║   1 - Да, продолжить приключение        ║
-        ║   2 - Нет, выйти из игры                ║
-        ║                                          ║
-        ╚══════════════════════════════════════════╝", ConsoleColor.Yellow);
-
-            var choice = Console.ReadLine();
-            return choice == "1";
-        }
     }
 }

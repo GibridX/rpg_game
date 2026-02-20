@@ -1,4 +1,5 @@
 using TextRPG.Config;
+using TextRPG.Core.Utils;
 
 namespace TextRPG.Core.Models
 {
@@ -23,11 +24,11 @@ namespace TextRPG.Core.Models
 
         private void InitializeStats()
         {
-            MaxHealth = (100 + (Level * _config.BossHealthMuliplier)) * 2;
+            MaxHealth = 80 + (Level * 8);
             Health = MaxHealth;
-            Attack = (10 + (Level * _config.BossAttackMultiplier)) * 2;
-            GoldReward = 200 + (Level * 50);
-            ExperienceReward = 100 + (Level * 25);
+            Attack = 12 + (Level * 2);
+            GoldReward = 100 + (Level * 25);
+            ExperienceReward = 50 + (Level * 15);
         }
 
         private void InitializeAbilities()
@@ -43,17 +44,18 @@ namespace TextRPG.Core.Models
 
         public override int CalculateDamage()
         {
-            int variance = _random.Next(-5, 10);
+            int variance = _random.Next(-3, 6);
 
             if (_random.Next(100) < SpecialAbilityChance)
             {
-                return (int)((Attack + variance) * 1.5);
+                ConsoleHelper.WriteColor($"{Name} использует {UseSpecialAbility()}!", ConsoleColor.DarkMagenta);
+                return (int)((Attack + variance) * 1.1);
             }
 
             return Math.Max(1, Attack + variance);
         }
 
-        public string UseSpecialAbility()
+        public override string UseSpecialAbility()
         {
             if (SpecialAbilities.Count == 0)
                 return "Мощная атака";
@@ -64,9 +66,10 @@ namespace TextRPG.Core.Models
 
         public override void TakeDamage(int damage)
         {
-            if (_random.Next(100) < 20)
+            if (_random.Next(100) < 15)
             {
-                damage = (int)(damage * 0.7);
+                damage = (int)(damage * 0.8);
+                ConsoleHelper.WriteColor($"{Name} сопротивляется урону!", ConsoleColor.DarkGray);
             }
 
             base.TakeDamage(damage);
